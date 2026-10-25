@@ -1,0 +1,10 @@
+# Variables de entorno
+.env
+/backend/.env
+/backend/agent/.env
+
+# Entorno virtual
+dda-env/
+
+# Base de datos SQLite local
+database/*.db
