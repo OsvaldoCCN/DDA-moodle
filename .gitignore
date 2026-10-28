@@ -7,4 +7,4 @@
 dda-env/
 
 # Base de datos SQLite local
-database/*.db
+database/
