@@ -1,6 +1,6 @@
+import logging
 import mysql.connector
 from langchain_core.tools import tool
-
 
 from config import (
     DB_HOST,
@@ -9,6 +9,7 @@ from config import (
     DB_NAME,
 )
 
+logger = logging.getLogger(__name__)
 
 def obtener_conexion():
     return mysql.connector.connect(
@@ -24,27 +25,37 @@ def consultar_rendimiento_cuestionarios(estudiante_id: int) -> str:
     Usa esta herramienta para consultar las notas y los intentos de un estudiante en sus cuestionarios.
     Útil cuando el estudiante pregunta por sus calificaciones o necesitas evaluar su fase de 'Desempeño' o 'Reflexión' SRL.
     """
-    conexion = obtener_conexion()
-    cursor = conexion.cursor()
-    
-    cursor.execute('''
-        SELECT moodle_quizid, numero_intento, estado, nota, minutos_usados 
-        FROM historico_cuestionarios 
-        WHERE estudiante_id = %s
-        ORDER BY fecha_registro DESC
-    ''', (estudiante_id,))
-    
-    resultados = cursor.fetchall()
-    conexion.close()
-    
-    if not resultados:
-        return "El estudiante aún no ha rendido ningún cuestionario."
+    conexion = None
+    try:
+        conexion = obtener_conexion()
+        cursor = conexion.cursor()
         
-    respuesta = "Historial de Cuestionarios del estudiante:\n"
-    for fila in resultados:
-        respuesta += f"- Quiz ID {fila[0]} | Intento {fila[1]} | Estado: {fila[2]} | Nota: {fila[3]} | Tiempo: {fila[4]} min\n"
+        cursor.execute('''
+            SELECT moodle_quizid, numero_intento, estado, nota, minutos_usados 
+            FROM historico_cuestionarios 
+            WHERE estudiante_id = %s
+            ORDER BY fecha_registro DESC
+        ''', (estudiante_id,))
         
-    return respuesta
+        resultados = cursor.fetchall()
+        cursor.close()
+        
+        if not resultados:
+            return "El estudiante aún no ha rendido ningún cuestionario en la base de datos."
+            
+        respuesta = f"Historial de Cuestionarios del estudiante ID {estudiante_id}:\n"
+        for fila in resultados:
+            nota_str = f"{fila[3]:.1f}" if fila[3] is not None else "Sin nota"
+            minutos_str = f"{fila[4]:.1f}" if fila[4] is not None else "N/A"
+            respuesta += f"- Quiz ID {fila[0]} | Intento {fila[1]} | Estado: {fila[2]} | Nota: {nota_str} | Tiempo: {minutos_str} min\n"
+            
+        return respuesta
+    except Exception as e:
+        logger.error(f"Error al consultar cuestionarios para estudiante {estudiante_id}: {e}")
+        return f"No se pudo consultar el rendimiento de cuestionarios debido a un error de conexión: {str(e)}"
+    finally:
+        if conexion and conexion.is_connected():
+            conexion.close()
 
 @tool
 def consultar_esfuerzo_scorm(estudiante_id: int) -> str:
@@ -52,32 +63,40 @@ def consultar_esfuerzo_scorm(estudiante_id: int) -> str:
     Usa esta herramienta para revisar si el estudiante ha estudiado el material de clases (paquetes SCORM).
     Útil para la fase de 'Monitoreo' SRL, para saber si el alumno leyó la materia antes de hacer preguntas o evaluaciones.
     """
-    conexion = obtener_conexion()
-    cursor = conexion.cursor()
-    
-    cursor.execute('''
-        WITH UltimosSCORM AS (
-            SELECT moodle_scormid, estado, puntaje, fecha_registro,
-                   ROW_NUMBER() OVER(PARTITION BY moodle_scormid ORDER BY fecha_registro DESC) as fila
-            FROM historico_scorm 
-            WHERE estudiante_id = %s
-        )
-        SELECT moodle_scormid, estado, puntaje, fecha_registro 
-        FROM UltimosSCORM 
-        WHERE fila = 1
-    ''', (estudiante_id,))
-    
-    resultados = cursor.fetchall()
-    conexion.close()
-    
-    if not resultados:
-        return "El estudiante no ha abierto ningún material de estudio (SCORM) aún."
+    conexion = None
+    try:
+        conexion = obtener_conexion()
+        cursor = conexion.cursor()
         
-    respuesta = "Progreso de estudio del material (SCORM):\n"
-    for fila in resultados:
-        puntaje_texto = f"{fila[2]}%" if fila[2] is not None else "Sin calificar"
-        respuesta += f"- Módulo SCORM {fila[0]} | Estado: {fila[1]} | Puntaje interno: {puntaje_texto}\n"
+        cursor.execute('''
+            WITH UltimosSCORM AS (
+                SELECT moodle_scormid, estado, puntaje, fecha_registro,
+                       ROW_NUMBER() OVER(PARTITION BY moodle_scormid ORDER BY fecha_registro DESC) as fila
+                FROM historico_scorm 
+                WHERE estudiante_id = %s
+            )
+            SELECT moodle_scormid, estado, puntaje, fecha_registro 
+            FROM UltimosSCORM 
+            WHERE fila = 1
+        ''', (estudiante_id,))
         
-    return respuesta
+        resultados = cursor.fetchall()
+        cursor.close()
+        
+        if not resultados:
+            return "El estudiante no registra interacciones en paquetes de contenido (SCORM) aún."
+            
+        respuesta = f"Progreso de estudio del material (SCORM) para estudiante ID {estudiante_id}:\n"
+        for fila in resultados:
+            puntaje_texto = f"{fila[2]}%" if fila[2] is not None else "Sin calificar"
+            respuesta += f"- Módulo SCORM {fila[0]} | Estado: {fila[1]} | Avance/Puntaje: {puntaje_texto}\n"
+            
+        return respuesta
+    except Exception as e:
+        logger.error(f"Error al consultar SCORM para estudiante {estudiante_id}: {e}")
+        return f"No se pudo consultar el progreso de SCORM debido a un error de conexión: {str(e)}"
+    finally:
+        if conexion and conexion.is_connected():
+            conexion.close()
 
 tools = [consultar_rendimiento_cuestionarios, consultar_esfuerzo_scorm]
