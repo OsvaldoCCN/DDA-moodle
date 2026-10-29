@@ -1,32 +1,47 @@
-import requests
 import os
-from dotenv import load_dotenv
+import requests
+import logging
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
-MOODLE_URL = os.getenv("MOODLE_URL")
-MOODLE_TOKEN = os.getenv("MOODLE_TOKEN")
-
-def call_moodle_api(function_name, **kwargs):
-    params = {
-        "wstoken": MOODLE_TOKEN,
-        "wsfunction": function_name,
-        "moodlewsrestformat": "json"
-    }
-    params.update(kwargs)
+def call_moodle_api(wsfunction, **kwargs):
+    token = os.getenv("MOODLE_TOKEN")
+    url_base = os.getenv("MOODLE_URL")
     
-    response = requests.post(MOODLE_URL, data=params)
-    
-
-    print(f"Status Code: {response.status_code}")
-    print(f"Respuesta cruda: {response.text[:500]}") 
-    
-    try:
-        return response.json()
-    except requests.exceptions.JSONDecodeError:
-        print("Error: La respuesta no pudo ser convertida a JSON.")
+    if not token or not url_base:
+        logger.error("Falta MOODLE_TOKEN o MOODLE_URL en las variables de entorno.")
         return None
 
-
-site_info = call_moodle_api("core_webservice_get_site_info")
-print(site_info)
+    # Endpoint base
+    endpoint = f"{url_base}/webservice/rest/server.php"
+    
+    # Parámetros base, FORZANDO siempre JSON
+    payload = {
+        "wstoken": token,
+        "wsfunction": wsfunction,
+        "moodlewsrestformat": "json"
+    }
+    
+    # Añadimos los parámetros dinámicos (courseids, userid, etc.)
+    payload.update(kwargs)
+    
+    try:
+        response = requests.post(endpoint, data=payload)
+        response.raise_for_status()
+        
+        # Intentamos parsear a JSON
+        data = response.json()
+        
+        # Moodle devuelve código HTTP 200 incluso si hay un error lógico de token
+        if isinstance(data, dict) and data.get("exception"):
+            logger.error(f"Moodle API Exception [{data.get('errorcode')}]: {data.get('message')}")
+            return None
+            
+        return data
+        
+    except ValueError:
+        logger.error(f"La respuesta no es JSON válido. Respuesta cruda: {response.text}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error de red al conectar con Moodle: {e}")
+        return None

@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any
-from langchain_core.messages import SystemMessage, AIMessage
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langgraph.prebuilt import ToolNode
 from llm import llm
 from tools import tools
@@ -8,20 +8,28 @@ from tools import tools
 logger = logging.getLogger(__name__)
 
 tool_node = ToolNode(tools)
+llm_with_tools = llm.bind_tools(tools)
 
 def gatekeeper_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Guardián de entrada: Filtra solicitudes fuera de ámbito o intentos de trampa.
-    Si detecta trampa, responde con un mensaje de rechazo pedagógico y detiene el flujo.
     """
     mensaje = state.get("user_message", "")
     
     prompt_guardrail = f"""Eres el guardián de entrada (Gatekeeper) de un tutor socrático universitario.
-Tu única tarea es analizar el mensaje del estudiante y decidir si la consulta es una petición válida para guiar su aprendizaje (dudas conceptuales, avance, organización, reflexión) o si es una consulta fuera de scope / trampa (ej: "resuelve esta ecuación por mí", "hazme todo el código de la tarea", temas totalmente ajenos al estudio).
+Tu tarea es analizar el mensaje del estudiante y decidir si la consulta es una petición válida para guiar su aprendizaje.
+
+CONSULTAS VÁLIDAS:
+- Consultar desempeño, notas, progreso, avance o estado general en el curso (ej: "¿cómo me ha ido?", "¿cuáles son mis notas?").
+- Dudas conceptuales, organización del tiempo, estrategias de estudio y reflexión metacognitiva.
+
+CONSULTAS INVÁLIDAS / TRAMPA / FUERA DE ÁMBITO:
+- Pedir que el tutor resuelva directamente un ejercicio, examen, tarea o programe código por ellos.
+- Temas ajenos a la universidad o al ámbito académico.
 
 Último mensaje del estudiante: "{mensaje}"
 
-REGLA ESTRICTA: Responde ÚNICAMENTE con la palabra "valido" si la consulta es apropiada para el tutor, o "invalido" si intenta hacer trampa o está fuera de contexto."""
+REGLA ESTRICTA: Responde ÚNICAMENTE con la palabra "valido" o "invalido"."""
 
     respuesta = llm.invoke([SystemMessage(content=prompt_guardrail)])
     decision = respuesta.content.strip().lower()
@@ -35,29 +43,28 @@ REGLA ESTRICTA: Responde ÚNICAMENTE con la palabra "valido" si la consulta es a
             "messages": [mensaje_rechazo],
             "es_valido": False
         }
-        
-    return {"es_valido": True}
+    
+    return {
+        "es_valido": True,
+        "messages": [HumanMessage(content=mensaje)]
+    }
 
 def srl_classifier_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Clasifica la interacción según el modelo de Aprendizaje Autorregulado (SRL):
-    1. Planificación (fijación de metas, gestión del tiempo, orientación inicial)
-    2. Monitoreo (seguimiento de avance, revisión de esfuerzo, comprensión en curso)
-    3. Reflexión (autoevaluación post-tarea, análisis de calificaciones vs hábitos)
+    Clasifica la interacción según el modelo de Aprendizaje Autorregulado (SRL).
     """
     mensaje = state.get("user_message", "")
 
     prompt_clasificador = f"""Eres un experto pedagógico en el modelo de Aprendizaje Autorregulado (SRL).
-Clasifica la intención del estudiante en una de las siguientes tres fases basándote en su último mensaje:
-1. planificacion (ej: organizar tiempo, establecer metas, buscar por dónde empezar).
-2. monitoreo (ej: consultar progreso, ajustar estrategias durante el estudio, consultar métricas actuales).
-3. reflexion (ej: análisis de notas, contrastar esfuerzo vs resultado, evaluación post-estudio).
-
-Si la consulta es muy genérica o no encaja claramente, responde 'indefinida'.
+Clasifica la intención del estudiante en una de las siguientes tres fases:
+1. planificacion (organizar tiempo, fijación de metas, estructurar plan de estudio).
+2. monitoreo (consultar progreso actual, revisar notas/rendimiento, seguimiento de lecturas o cuestionarios).
+3. reflexion (análisis post-evaluación, autoevaluación, relación esfuerzo vs resultados).
 
 Último mensaje del estudiante: "{mensaje}"
 
-REGLA ESTRICTA: Responde ÚNICAMENTE con una sola palabra en minúsculas: planificacion, monitoreo, reflexion o indefinida."""
+Si la consulta es sobre su avance o estado en el curso, clasifícala siempre como 'monitoreo'.
+REGLA ESTRICTA: Responde ÚNICAMENTE con una palabra en minúsculas: planificacion, monitoreo, reflexion o indefinida."""
 
     respuesta_llm = llm.invoke([SystemMessage(content=prompt_clasificador)])
     
@@ -74,12 +81,9 @@ REGLA ESTRICTA: Responde ÚNICAMENTE con una sola palabra en minúsculas: planif
             
     return {"fase_srl_actual": fase_final}
 
-llm_with_tools = llm.bind_tools(tools)
-
 def data_orchestrator_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Evalúa si la fase SRL o la consulta del estudiante requiere consultar datos académicos
-    (cuestionarios o progreso SCORM) a través de herramientas de base de datos.
+    Evalúa si se deben consultar herramientas de base de datos según la pregunta del usuario.
     """
     historial = state.get("messages", [])
     fase = state.get("fase_srl_actual", "indefinida")
@@ -89,17 +93,16 @@ def data_orchestrator_node(state: Dict[str, Any]) -> Dict[str, Any]:
 Fase SRL actual del estudiante: {fase}
 ID del estudiante: {estudiante_id}
 
-Tu tarea: Analiza la conversación y decide si necesitas consultar la base de datos utilizando alguna herramienta disponible:
-- 'consultar_rendimiento_cuestionarios' para notas, intentos y tiempos en evaluaciones.
-- 'consultar_esfuerzo_scorm' para progreso de lectura y módulos de estudio.
+Tu tarea: Revisa la consulta del estudiante en el historial y decide si necesitas consultar la base de datos:
+- Usa 'consultar_rendimiento_cuestionarios' si pregunta por notas, estado en el curso, evaluaciones o desempeño.
+- Usa 'consultar_esfuerzo_scorm' si pregunta por avance de lectura o material visto.
 
-Si requieres información del estudiante para responder pedagógicamente, invoca la herramienta correspondiente con el estudiante_id={estudiante_id}.
-Si NO requieres consultar la base de datos, NO invoques ninguna herramienta."""
+Si la consulta requiere datos académicos del alumno, invoca OBLIGATORIAMENTE la herramienta correspondiente pasando estudiante_id={estudiante_id}.
+Si no requiere datos, NO invoques ninguna herramienta."""
 
     mensajes = [SystemMessage(content=prompt_orquestador)] + historial
     respuesta = llm_with_tools.invoke(mensajes)
     
-    # Solo agregamos el mensaje al estado si decidió invocar herramientas
     if hasattr(respuesta, "tool_calls") and respuesta.tool_calls:
         return {"messages": [respuesta]}
     
@@ -140,8 +143,7 @@ REGLAS PEDAGÓGICAS ESTRICTAS (MURO SOCRÁTICO):
 def llm_judge_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Evaluador de calidad pedagógica (LLM-as-a-Judge):
-    Verifica que la respuesta generada cumpla estrictamente con el Muro Socrático
-    y la orientación pedagógica SRL. Si detecta que dio la respuesta directa, la reescribe.
+    Verifica que la respuesta generada cumpla estrictamente con el Muro Socrático.
     """
     mensajes = state.get("messages", [])
     if not mensajes:
@@ -159,14 +161,14 @@ Respuesta propuesta por el tutor:
 \"\"\"{contenido_borrador}\"\"\"
 
 CRITERIOS DE AUDITORÍA:
-1. Muro Socrático: ¿El tutor evitó dar la solución directa, resolución de ejercicios o código final? (Debe ser estricto: NO resolver tareas).
+1. Muro Socrático: ¿El tutor evitó dar la solución directa, resolución de ejercicios o código final?
 2. Pregunta Reflexiva: ¿Incluye al menos una pregunta que fomente la reflexión, monitoreo o planificación del estudiante?
 3. Tono Pedagógico: ¿El tono es constructivo y acorde a la fase {fase}?
 
 INSTRUCCIONES:
 - Si el mensaje CUMPLE con los criterios socráticos, responde únicamente:
 APROBADO
-- Si el mensaje VIOLA el muro socrático (da la respuesta directa o código), responde con la corrección en este formato exacto:
+- Si el mensaje VIOLA el muro socrático, responde con la corrección en este formato exacto:
 CORREGIDO: [Escribe aquí la versión corregida respetando el método socrático y la fase SRL]"""
 
     evaluacion = llm.invoke([SystemMessage(content=prompt_juez)])
@@ -174,7 +176,6 @@ CORREGIDO: [Escribe aquí la versión corregida respetando el método socrático
     
     if texto_eval.startswith("CORREGIDO:"):
         nuevo_contenido = texto_eval.replace("CORREGIDO:", "").strip()
-        # Reemplazamos el mensaje borrador manteniendo el mismo ID para LangGraph
         mensaje_corregido = AIMessage(
             content=nuevo_contenido,
             id=getattr(mensaje_borrador, "id", None)
@@ -186,4 +187,4 @@ CORREGIDO: [Escribe aquí la versión corregida respetando el método socrático
     
     return {
         "evaluacion_juez": {"estado": "aprobado"}
-    }
+    }
