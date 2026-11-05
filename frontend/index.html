@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diario de Aprendizaje</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:wght@500;600&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<main id="login">
+  <form class="login-box" id="loginForm" autocomplete="off">
+    <div class="stack">
+      <h1>Diario de aprendizaje</h1>
+      <p>Revisa tu avance en el curso y conversa con tu tutor.</p>
+    </div>
+    <div class="field">
+      <label for="uid" class="label">ID de estudiante</label>
+      <input id="uid" inputmode="numeric" placeholder="Ej: 3" maxlength="12" required>
+      <p class="err" id="err" role="alert"></p>
+    </div>
+    <button class="btn" id="loginBtn" type="submit">Ingresar</button>
+  </form>
+</main>
+
+<div id="app" hidden>
+  <section class="lad" aria-label="Panel de aprendizaje">
+    <div class="topbar">
+      <div>
+        <span class="label">Tu diario de aprendizaje</span>
+        <h2 id="title">Estudiante</h2>
+        <div class="who mono" id="who"></div>
+      </div>
+      <button class="link" id="logout" type="button">Cerrar sesión</button>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="row">
+      <div class="panel">
+        <div class="panel-head"><h3>Notas en cuestionarios</h3><span class="legend" id="escala"></span></div>
+        <div id="chartWrap"></div>
+        <span class="legend">Barras rayadas: nota bajo el 57% de la escala.</span>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Tiempo por actividad</h3><span class="legend">Minutos</span></div>
+        <div class="hbars" id="hbars"></div>
+        <span class="legend">Relleno: material interactivo. Contorno: cuestionario.</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>Material interactivo</h3><span class="legend" id="scormTotal"></span></div>
+      <div class="acts" id="scorm"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>Cuestionarios</h3><span class="legend" id="quizTotal"></span></div>
+      <div class="acts" id="quizzes"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Fases de autorregulación</h3>
+      <div class="phases" id="phases"></div>
+    </div>
+  </section>
+
+  <aside class="chat" aria-label="Tutor">
+    <div class="chat-head">
+      <h3>Tutor socrático</h3>
+      <p>Te hace preguntas para que reflexiones sobre tus datos.</p>
+    </div>
+    <div class="msgs" id="msgs" aria-live="polite"></div>
+    <div class="chips" id="chips"></div>
+    <form class="composer" id="composer" autocomplete="off">
+      <input id="msg" placeholder="Escribe tu mensaje" aria-label="Mensaje">
+      <button class="btn" id="sendBtn" type="submit">Enviar</button>
+    </form>
+  </aside>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
