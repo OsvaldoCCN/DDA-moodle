@@ -19,13 +19,13 @@ def gatekeeper_node(state: Dict[str, Any]) -> Dict[str, Any]:
     prompt_guardrail = f"""Eres el guardián de entrada (Gatekeeper) de un tutor socrático universitario.
 Tu tarea es analizar el mensaje del estudiante y decidir si la consulta es una petición válida para guiar su aprendizaje.
 
-CONSULTAS VÁLIDAS:
-- Consultar desempeño, notas, progreso, avance o estado general en el curso (ej: "¿cómo me ha ido?", "¿cuáles son mis notas?").
+CONSULTAS VÁLIDAS (Debe ser aprobado):
+- Consultar desempeño, notas, progreso, avance, actividades realizadas, intentos o estado general en el curso (ej: "¿cómo me ha ido?", "¿cuántos scorms he hecho?", "¿cuáles son mis notas?").
 - Dudas conceptuales, organización del tiempo, estrategias de estudio y reflexión metacognitiva.
 
-CONSULTAS INVÁLIDAS / TRAMPA / FUERA DE ÁMBITO:
+CONSULTAS INVÁLIDAS / TRAMPA / FUERA DE ÁMBITO (Debe ser rechazado):
 - Pedir que el tutor resuelva directamente un ejercicio, examen, tarea o programe código por ellos.
-- Temas ajenos a la universidad o al ámbito académico.
+- Temas completamente ajenos a la universidad o al ámbito académico.
 
 Último mensaje del estudiante: "{mensaje}"
 
@@ -129,11 +129,7 @@ Fase actual del estudiante: {fase}
 
 ESTILO Y PERSONALIDAD:
 {personalidad}
-
-REGLAS PEDAGÓGICAS ESTRICTAS (MURO SOCRÁTICO):
-1. NUNCA des la respuesta directa a un problema, ni el código, ni la solución de una tarea.
-2. Si dispones de datos académicos recientes en el historial (notas o SCORM), úsalos para fundamentar tu retroalimentación.
-3. Formula UNA sola pregunta reflexiva clara al final, alineada con la fase SRL, para fomentar la metacognición."""
+"""
 
     mensajes_llm = [SystemMessage(content=prompt_sistema)] + historial
     respuesta = llm.invoke(mensajes_llm)

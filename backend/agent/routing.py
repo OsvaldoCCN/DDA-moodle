@@ -34,4 +34,4 @@ def route_tools(state: dict) -> Literal["generator"]:
     """
     Tras ejecutar las herramientas en 'tools', siempre avanza al generador.
     """
-    return "generator"
+    return "generator"

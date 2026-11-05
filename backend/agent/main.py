@@ -7,7 +7,7 @@ if __name__ == "__main__":
     print("  Escribe 'salir' para terminar.")
     print("=" * 60 + "\n")
     
-    ID_ALUMNO_ACTIVO = 1 
+    ID_ALUMNO_ACTIVO = 3 
 
     estado_actual = {
         "messages": [],

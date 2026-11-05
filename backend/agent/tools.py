@@ -1,5 +1,6 @@
 import logging
 import mysql.connector
+import json
 from langchain_core.tools import tool
 
 from config import (
@@ -30,11 +31,13 @@ def consultar_rendimiento_cuestionarios(estudiante_id: int) -> str:
         conexion = obtener_conexion()
         cursor = conexion.cursor()
         
+        # OJO: Si historico_cuestionarios tampoco tiene fecha_registro, fallará. 
+        # Cambiamos el ORDER BY a numero_intento por seguridad.
         cursor.execute('''
             SELECT moodle_quizid, numero_intento, estado, nota, minutos_usados 
             FROM historico_cuestionarios 
             WHERE estudiante_id = %s
-            ORDER BY fecha_registro DESC
+            ORDER BY moodle_quizid, numero_intento DESC
         ''', (estudiante_id,))
         
         resultados = cursor.fetchall()
@@ -60,24 +63,22 @@ def consultar_rendimiento_cuestionarios(estudiante_id: int) -> str:
 @tool
 def consultar_esfuerzo_scorm(estudiante_id: int) -> str:
     """
-    Usa esta herramienta para revisar si el estudiante ha estudiado el material de clases (paquetes SCORM).
-    Útil para la fase de 'Monitoreo' SRL, para saber si el alumno leyó la materia antes de hacer preguntas o evaluaciones.
+    Usa esta herramienta para revisar si el estudiante ha estudiado el material interactivo (SCORM), 
+    cuántos intentos realizó y en qué preguntas específicas se equivocó leyendo el suspend_data JSON.
+    Útil para la fase de 'Monitoreo' o 'Reflexión' SRL.
     """
     conexion = None
     try:
         conexion = obtener_conexion()
         cursor = conexion.cursor()
         
+        # Adaptado a la nueva estructura: Sin fecha_registro, usando numero_intento para el orden
+        # y extrayendo el suspend_data.
         cursor.execute('''
-            WITH UltimosSCORM AS (
-                SELECT moodle_scormid, estado, puntaje, fecha_registro,
-                       ROW_NUMBER() OVER(PARTITION BY moodle_scormid ORDER BY fecha_registro DESC) as fila
-                FROM historico_scorm 
-                WHERE estudiante_id = %s
-            )
-            SELECT moodle_scormid, estado, puntaje, fecha_registro 
-            FROM UltimosSCORM 
-            WHERE fila = 1
+            SELECT moodle_scormid, numero_intento, estado, puntaje, suspend_data, tiempo_invertido_segundos
+            FROM historico_scorm 
+            WHERE estudiante_id = %s
+            ORDER BY moodle_scormid, numero_intento ASC
         ''', (estudiante_id,))
         
         resultados = cursor.fetchall()
@@ -86,11 +87,35 @@ def consultar_esfuerzo_scorm(estudiante_id: int) -> str:
         if not resultados:
             return "El estudiante no registra interacciones en paquetes de contenido (SCORM) aún."
             
-        respuesta = f"Progreso de estudio del material (SCORM) para estudiante ID {estudiante_id}:\n"
+        respuesta = f"Progreso detallado del material interactivo (SCORM) para estudiante ID {estudiante_id}:\n"
+        
         for fila in resultados:
-            puntaje_texto = f"{fila[2]}%" if fila[2] is not None else "Sin calificar"
-            respuesta += f"- Módulo SCORM {fila[0]} | Estado: {fila[1]} | Avance/Puntaje: {puntaje_texto}\n"
+            scorm_id = fila[0]
+            intento = fila[1]
+            estado = fila[2]
+            puntaje = f"{fila[3]}%" if fila[3] is not None else "Sin calificar"
+            json_respuestas = fila[4]
+            tiempo = fila[5]
             
+            respuesta += f"\n- Módulo SCORM {scorm_id} (Intento {intento}) | Estado: {estado} | Tiempo: {tiempo}s | Puntaje: {puntaje}\n"
+            
+            # Formateamos el JSON para que el LLM lo entienda fácil
+            if json_respuestas:
+                try:
+                    datos_json = json.loads(json_respuestas)
+                    # Si el JSON tiene la estructura típica de H5P/SCORM con 'answers' o 'reveals'
+                    if 'answers' in datos_json:
+                        respuesta += "  Respuestas específicas del alumno en este intento:\n"
+                        for pregunta_id, datos_respuesta in datos_json['answers'].items():
+                            correcta = "Correcta (ok:true)" if datos_respuesta.get('ok') else "Incorrecta (ok:false)"
+                            respuesta += f"    * Pregunta {pregunta_id}: {correcta}\n"
+                    else:
+                        respuesta += f"  Datos internos guardados: {json_respuestas}\n"
+                except json.JSONDecodeError:
+                    respuesta += f"  Datos internos guardados: {json_respuestas}\n"
+            else:
+                respuesta += "  No hay registro de respuestas específicas guardadas.\n"
+                
         return respuesta
     except Exception as e:
         logger.error(f"Error al consultar SCORM para estudiante {estudiante_id}: {e}")
