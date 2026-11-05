@@ -29,34 +29,45 @@ class MoodleSRLParser:
 
     @staticmethod
     def limpiar_tracking_scorm(raw_data):
-        """ Limpia mod_scorm_get_scorm_sco_tracks """
+        """ 
+        Limpia mod_scorm_get_scorm_sco_tracks.
+        Extrae estado, puntaje, tiempo y las respuestas detalladas (suspend_data).
+        """
         tracks = raw_data.get('data', {}).get('tracks', [])
+        
         datos = {
-            "estado": "desconocido",
-            "puntaje_raw": None,
-            "tiempo_segundos": 0
+            "estado": "incomplete",
+            "puntaje_raw": 0.0,
+            "tiempo_segundos": 0,
+            "suspend_data": None
         }
         
         for track in tracks:
             elemento = track.get('element')
             valor = track.get('value')
             
-            if elemento == 'cmi.core.lesson_status' or elemento == 'cmi.completion_status':
+            if not valor:
+                continue
+                
+            if elemento in ['cmi.core.lesson_status', 'cmi.completion_status']:
                 datos["estado"] = valor
-            elif elemento == 'cmi.core.score.raw' or elemento == 'cmi.score.raw':
+            elif elemento in ['cmi.core.score.raw', 'cmi.score.raw']:
                 try:
                     datos["puntaje_raw"] = float(valor)
                 except (ValueError, TypeError):
                     pass
-            elif elemento == 'cmi.core.session_time' or elemento == 'cmi.session_time':
-                # Moodle suele guardar el tiempo en formato HH:MM:SS
+            elif elemento in ['cmi.core.total_time', 'cmi.core.session_time', 'cmi.session_time']:
+                # Moodle suele guardar el tiempo en formato HH:MM:SS o HH:MM:SS.SS
                 partes = str(valor).split(':')
                 if len(partes) == 3:
                     try:
                         segundos = int(partes[0]) * 3600 + int(partes[1]) * 60 + float(partes[2])
                         datos["tiempo_segundos"] += int(segundos)
-                    except ValueError:
+                    except (ValueError, TypeError):
                         pass
+            elif elemento == 'cmi.suspend_data':
+                # Aquí atrapamos el JSON vital con las respuestas del alumno
+                datos["suspend_data"] = valor
                         
         return datos
 
