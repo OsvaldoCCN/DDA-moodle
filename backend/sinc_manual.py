@@ -18,7 +18,8 @@ def obtener_conexion():
         host=os.getenv("DB_HOST"),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME")
+        database=os.getenv("DB_NAME"),
+        port=os.getenv("DB_PORT")
     )
 
 def registrar_y_sincronizar_curso(course_id: int):
@@ -26,6 +27,28 @@ def registrar_y_sincronizar_curso(course_id: int):
     cursor = conexion.cursor()
     
     logger.info(f"--- [MANUAL] Iniciando registro y sincronización del Curso ID: {course_id} ---")
+
+    # 0. Registrar o Actualizar Curso
+    logger.info(f"Registrando/Actualizando Curso ID Moodle: {course_id}...")
+    info_curso = call_moodle_api("core_course_get_courses_by_field", field="id", value=course_id)
+    nombre_corto = None
+    nombre_completo = None
+    if info_curso and "courses" in info_curso and len(info_curso["courses"]) > 0:
+        c_data = info_curso["courses"][0]
+        nombre_corto = c_data.get("shortname")
+        nombre_completo = c_data.get("fullname")
+    
+    cursor.execute('''
+        INSERT INTO cursos (moodle_courseid, nombre_corto, nombre_completo)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE 
+            nombre_corto = COALESCE(VALUES(nombre_corto), nombre_corto),
+            nombre_completo = COALESCE(VALUES(nombre_completo), nombre_completo)
+    ''', (course_id, nombre_corto, nombre_completo))
+    
+    cursor.execute("SELECT id FROM cursos WHERE moodle_courseid = %s", (course_id,))
+    res_curso = cursor.fetchone()
+    curso_local_id = res_curso[0] if res_curso else None
 
     # 1. Obtener Quizzes y SCORMs
     logger.info("Descubriendo actividades del curso...")
@@ -66,7 +89,6 @@ def registrar_y_sincronizar_curso(course_id: int):
             INSERT IGNORE INTO estudiantes (moodle_userid, email, anon_id) 
             VALUES (%s, %s, %s)
         ''', (moodle_userid, email, anon_id))
-        conexion.commit()
         
         cursor.execute("SELECT id FROM estudiantes WHERE moodle_userid = %s", (moodle_userid,))
         resultado = cursor.fetchone()
@@ -76,6 +98,13 @@ def registrar_y_sincronizar_curso(course_id: int):
             continue
             
         estudiante_local_id = resultado[0]
+
+        # Registrar relación estudiante en el curso
+        if curso_local_id:
+            cursor.execute('''
+                INSERT IGNORE INTO curso_estudiantes (estudiante_id, curso_id)
+                VALUES (%s, %s)
+            ''', (estudiante_local_id, curso_local_id))
 
         # Sincronizar Quizzes
         for quiz in quizzes:

@@ -17,7 +17,8 @@ def obtener_conexion():
         host=os.getenv("DB_HOST"),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME")
+        database=os.getenv("DB_NAME"),
+        port=os.getenv("DB_PORT")          
     )
 
 def sincronizar_actividades_cron(course_id: int):
@@ -37,9 +38,20 @@ def sincronizar_actividades_cron(course_id: int):
     raw_scorms = call_moodle_api("mod_scorm_get_scorms_by_courses", courseids=[course_id])
     scorms = MoodleSRLParser.limpiar_scorms(raw_scorms) if raw_scorms else []
 
-    # 2. Obtener los estudiantes registrados localmente
-    cursor.execute("SELECT id, moodle_userid, anon_id FROM estudiantes")
+    # 2. Obtener los estudiantes registrados localmente en este curso
+    cursor.execute('''
+        SELECT e.id, e.moodle_userid, e.anon_id 
+        FROM estudiantes e
+        INNER JOIN curso_estudiantes ce ON e.id = ce.estudiante_id
+        INNER JOIN cursos c ON ce.curso_id = c.id
+        WHERE c.moodle_courseid = %s
+    ''', (course_id,))
     estudiantes = cursor.fetchall()
+
+    # Si aún no hay curso_estudiantes cargados para este curso, hacemos fallback a todos los estudiantes
+    if not estudiantes:
+        cursor.execute("SELECT id, moodle_userid, anon_id FROM estudiantes")
+        estudiantes = cursor.fetchall()
 
     if not estudiantes:
         logger.warning("CRON: No hay estudiantes registrados en la BD local. Ejecuta el sincronizador manual primero.")

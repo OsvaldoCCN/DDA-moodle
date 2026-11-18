@@ -8,6 +8,7 @@ from config import (
     DB_USER,
     DB_PASSWORD,
     DB_NAME,
+    DB_PORT,
 )
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,8 @@ def obtener_conexion():
         host=DB_HOST,
         user=DB_USER,
         password=DB_PASSWORD,
-        database=DB_NAME
+        database=DB_NAME,
+        port=DB_PORT,      
     )
 
 @tool
