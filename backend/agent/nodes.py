@@ -45,8 +45,7 @@ REGLA ESTRICTA: Responde ÚNICAMENTE con la palabra "valido" o "invalido"."""
         }
     
     return {
-        "es_valido": True,
-        "messages": [HumanMessage(content=mensaje)]
+        "es_valido": True
     }
 
 def srl_classifier_node(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -88,16 +87,18 @@ def data_orchestrator_node(state: Dict[str, Any]) -> Dict[str, Any]:
     historial = state.get("messages", [])
     fase = state.get("fase_srl_actual", "indefinida")
     estudiante_id = state.get("estudiante_id", 1)
+    moodle_courseid = state.get("moodle_courseid") or state.get("curso_id") or 3
     
     prompt_orquestador = f"""Eres el orquestador de datos de un tutor socrático.
 Fase SRL actual del estudiante: {fase}
 ID del estudiante: {estudiante_id}
+ID del curso (moodle_courseid): {moodle_courseid}
 
 Tu tarea: Revisa la consulta del estudiante en el historial y decide si necesitas consultar la base de datos:
 - Usa 'consultar_rendimiento_cuestionarios' si pregunta por notas, estado en el curso, evaluaciones o desempeño.
 - Usa 'consultar_esfuerzo_scorm' si pregunta por avance de lectura o material visto.
 
-Si la consulta requiere datos académicos del alumno, invoca OBLIGATORIAMENTE la herramienta correspondiente pasando estudiante_id={estudiante_id}.
+Si la consulta requiere datos académicos del alumno, invoca OBLIGATORIAMENTE la herramienta correspondiente pasando estudiante_id={estudiante_id} y moodle_courseid={moodle_courseid}.
 Si no requiere datos, NO invoques ninguna herramienta."""
 
     mensajes = [SystemMessage(content=prompt_orquestador)] + historial

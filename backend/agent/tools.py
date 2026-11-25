@@ -19,13 +19,15 @@ def obtener_conexion():
         user=DB_USER,
         password=DB_PASSWORD,
         database=DB_NAME,
-        port=DB_PORT,      
+        port=DB_PORT,
+        charset="utf8mb4",
+        use_unicode=True,
     )
 
 @tool
-def consultar_rendimiento_cuestionarios(estudiante_id: int) -> str:
+def consultar_rendimiento_cuestionarios(estudiante_id: int, moodle_courseid: int) -> str:
     """
-    Usa esta herramienta para consultar las notas y los intentos de un estudiante en sus cuestionarios.
+    Usa esta herramienta para consultar las notas y los intentos de un estudiante en sus cuestionarios de un curso específico.
     Útil cuando el estudiante pregunta por sus calificaciones o necesitas evaluar su fase de 'Desempeño' o 'Reflexión' SRL.
     """
     conexion = None
@@ -33,22 +35,20 @@ def consultar_rendimiento_cuestionarios(estudiante_id: int) -> str:
         conexion = obtener_conexion()
         cursor = conexion.cursor()
         
-        # OJO: Si historico_cuestionarios tampoco tiene fecha_registro, fallará. 
-        # Cambiamos el ORDER BY a numero_intento por seguridad.
         cursor.execute('''
             SELECT moodle_quizid, numero_intento, estado, nota, minutos_usados 
             FROM historico_cuestionarios 
-            WHERE estudiante_id = %s
+            WHERE estudiante_id = %s AND moodle_courseid = %s
             ORDER BY moodle_quizid, numero_intento DESC
-        ''', (estudiante_id,))
+        ''', (estudiante_id, moodle_courseid))
         
         resultados = cursor.fetchall()
         cursor.close()
         
         if not resultados:
-            return "El estudiante aún no ha rendido ningún cuestionario en la base de datos."
+            return f"El estudiante aún no ha rendido ningún cuestionario en el curso {moodle_courseid}."
             
-        respuesta = f"Historial de Cuestionarios del estudiante ID {estudiante_id}:\n"
+        respuesta = f"Historial de Cuestionarios del estudiante ID {estudiante_id} (Curso {moodle_courseid}):\n"
         for fila in resultados:
             nota_str = f"{fila[3]:.1f}" if fila[3] is not None else "Sin nota"
             minutos_str = f"{fila[4]:.1f}" if fila[4] is not None else "N/A"
@@ -63,9 +63,9 @@ def consultar_rendimiento_cuestionarios(estudiante_id: int) -> str:
             conexion.close()
 
 @tool
-def consultar_esfuerzo_scorm(estudiante_id: int) -> str:
+def consultar_esfuerzo_scorm(estudiante_id: int, moodle_courseid: int) -> str:
     """
-    Usa esta herramienta para revisar si el estudiante ha estudiado el material interactivo (SCORM), 
+    Usa esta herramienta para revisar si el estudiante ha estudiado el material interactivo (SCORM) de un curso específico, 
     cuántos intentos realizó y en qué preguntas específicas se equivocó leyendo el suspend_data JSON.
     Útil para la fase de 'Monitoreo' o 'Reflexión' SRL.
     """
@@ -74,22 +74,20 @@ def consultar_esfuerzo_scorm(estudiante_id: int) -> str:
         conexion = obtener_conexion()
         cursor = conexion.cursor()
         
-        # Adaptado a la nueva estructura: Sin fecha_registro, usando numero_intento para el orden
-        # y extrayendo el suspend_data.
         cursor.execute('''
             SELECT moodle_scormid, numero_intento, estado, puntaje, suspend_data, tiempo_invertido_segundos
             FROM historico_scorm 
-            WHERE estudiante_id = %s
+            WHERE estudiante_id = %s AND moodle_courseid = %s
             ORDER BY moodle_scormid, numero_intento ASC
-        ''', (estudiante_id,))
+        ''', (estudiante_id, moodle_courseid))
         
         resultados = cursor.fetchall()
         cursor.close()
         
         if not resultados:
-            return "El estudiante no registra interacciones en paquetes de contenido (SCORM) aún."
+            return f"El estudiante no registra interacciones en paquetes de contenido (SCORM) en el curso {moodle_courseid} aún."
             
-        respuesta = f"Progreso detallado del material interactivo (SCORM) para estudiante ID {estudiante_id}:\n"
+        respuesta = f"Progreso detallado del material interactivo (SCORM) para estudiante ID {estudiante_id} (Curso {moodle_courseid}):\n"
         
         for fila in resultados:
             scorm_id = fila[0]

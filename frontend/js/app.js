@@ -6,7 +6,11 @@
     { k: "monitoreo", n: "Monitoreo", d: "Seguimiento y desempeño" },
     { k: "reflexion", n: "Reflexión", d: "Qué ajustar" }
   ];
-  var estId = null, fase = "indefinida";
+  var estId = null, courseId = null, fase = "indefinida";
+  var params = new URLSearchParams(window.location.search);
+  if (params.get("course_id") && /^\d+$/.test(params.get("course_id"))) {
+    $("cid").value = params.get("course_id");
+  }
 
   var fmt = function (n) { return (Math.round(n * 10) / 10).toFixed(1).replace(".", ","); };
   function esc(x) { return String(x).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
@@ -84,7 +88,7 @@
     add("me", esc(text)); $("msg").value = ""; $("sendBtn").disabled = true;
     var typing = add("bot", '<span class="dots"><i></i><i></i><i></i></span>');
     try {
-      var out = await API.chat(estId, text);
+      var out = await API.chat(estId, courseId, text);
       fase = out.fase; renderFases();
       typing.innerHTML = botHtml(out.respuesta, out.fase);
     } catch (e) {
@@ -96,7 +100,7 @@
   async function startChat() {
     $("msgs").innerHTML = ""; fase = "indefinida"; renderFases();
     var hist = [];
-    try { hist = await API.historial(estId); } catch (e) {}
+    try { hist = await API.historial(estId, courseId); } catch (e) {}
     if (hist.length) {
       hist.forEach(function (h) { add(h.rol === "user" ? "me" : "bot", h.rol === "user" ? esc(h.texto) : botHtml(h.texto, h.fase)); });
     } else {
@@ -112,12 +116,13 @@
   $("loginForm").addEventListener("submit", async function (e) {
     e.preventDefault();
     var v = $("uid").value.trim();
-    if (!/^\d+$/.test(v)) { $("err").textContent = "Ingresa un ID numérico, por ejemplo 3."; return; }
+    var c = $("cid").value.trim();
+    if (!/^\d+$/.test(v) || !/^\d+$/.test(c)) { $("err").textContent = "Ingresa IDs numéricos válidos para estudiante y curso."; return; }
     $("err").textContent = ""; $("loginBtn").disabled = true;
     try {
-      await API.login(v);
-      var lad = await API.lad(v);
-      estId = v; renderLad(lad); await startChat();
+      await API.login(v, c);
+      var lad = await API.lad(v, c);
+      estId = v; courseId = c; renderLad(lad); await startChat();
       $("login").hidden = true; $("app").hidden = false; window.scrollTo(0, 0);
     } catch (er) {
       $("err").textContent = /fetch|network/i.test(er.message) ? "No se pudo conectar con el servidor." : er.message;
@@ -125,6 +130,7 @@
     $("loginBtn").disabled = false;
   });
   $("logout").addEventListener("click", function () {
-    estId = null; $("app").hidden = true; $("login").hidden = false; $("uid").value = ""; $("uid").focus();
+    estId = null; courseId = null; $("msgs").innerHTML = "";
+    $("app").hidden = true; $("login").hidden = false; $("uid").value = ""; $("uid").focus();
   });
 })();

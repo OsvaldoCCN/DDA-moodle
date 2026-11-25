@@ -6,6 +6,7 @@ class AgentState(TypedDict, total=False):
     user_message: str
     
     estudiante_id: int
+    moodle_courseid: int
     curso_id: Optional[int]
     
     es_valido: bool

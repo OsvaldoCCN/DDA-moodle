@@ -1,4 +1,5 @@
 from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
 from state import AgentState
 from nodes import (
     gatekeeper_node, 
@@ -55,4 +56,6 @@ workflow.add_edge("generator", "llm_judge")
 # El juez valida y finaliza el ciclo
 workflow.add_edge("llm_judge", END)
 
-app = workflow.compile()
+# Checkpointer en memoria para aislar conversaciones por thread_id (estudiante + curso)
+memory = MemorySaver()
+app = workflow.compile(checkpointer=memory)

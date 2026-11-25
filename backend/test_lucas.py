@@ -1,45 +1,41 @@
+import json
 from dotenv import load_dotenv
 from moodle_client import call_moodle_api
 
 load_dotenv()
 
-LUCAS_MOODLE_ID = 4
-SCORM_ID = 13  # Probemos con el SCORM 13 que vimos en la DB
+USER_MOODLE_ID = 4
+COURSE_ID = 5  # Curso donde vimos el quiz 19
 
-print(f"🔍 [MODO PRODUCCIÓN] Obteniendo datos CMI de Lucas (ID {LUCAS_MOODLE_ID}) vía API REST...\n")
+print(f"🔍 [MODO PRODUCCIÓN] Obteniendo datos de Quizzes (Curso {COURSE_ID}, Usuario {USER_MOODLE_ID})...\n")
 
-# 1. Obtener la lista de SCOs del paquete SCORM
-# Usamos la función autorizada en tu Moodle: mod_scorm_get_scorm_scoes
-res_scoes = call_moodle_api("mod_scorm_get_scorm_scoes", scormid=SCORM_ID)
+# 1. Obtener la lista de quizzes del curso (para ver puntaje máximo: sumgrades y grade)
+res_quizzes = call_moodle_api("mod_quiz_get_quizzes_by_courses", courseids=[COURSE_ID])
 
-if not res_scoes or "scoes" not in res_scoes:
-    print("❌ No se pudieron obtener los SCOs del SCORM.")
+if not res_quizzes or "quizzes" not in res_quizzes:
+    print("❌ No se pudieron obtener los quizzes del curso.")
     exit()
 
-scoes = res_scoes["scoes"]
-print(f"📦 Se encontraron {len(scoes)} objeto(s) SCO en el SCORM {SCORM_ID}.")
+quizzes = res_quizzes["quizzes"]
+print(f"📦 Se encontraron {len(quizzes)} quiz(zes) en el curso {COURSE_ID}.")
 
-# 2. Consultar el tracking específico de Lucas en cada SCO
-for sco in scoes:
-    scoid = sco.get("id")
-    print(f"\n--- Consultando SCO ID: {scoid} ---")
-    
-    # Aquí es donde le decimos a Moodle explícitamente: "Dame los datos del userid 4, intento 1"
-    tracks = call_moodle_api(
-        "mod_scorm_get_scorm_sco_tracks", 
-        userid=LUCAS_MOODLE_ID, 
-        scoid=scoid, 
-        attempt=1
+# 2. Consultar los intentos del usuario en cada quiz
+for quiz in quizzes:
+    quiz_id = quiz.get("id")
+    print(f"\n--- Quiz ID: {quiz_id} | Nombre: {quiz.get('name')} ---")
+    print(f"  📊 Definición del Quiz -> sumgrades (suma preguntas): {quiz.get('sumgrades')} | grade (nota máxima escala): {quiz.get('grade')}")
+
+    # status="all" trae tanto intentos finalizados como en progreso
+    res_attempts = call_moodle_api(
+        "mod_quiz_get_user_attempts",
+        quizid=quiz_id,
+        userid=USER_MOODLE_ID,
+        status="all"
     )
-    
-    if tracks and "data" in tracks and "tracks" in tracks["data"]:
-        print("✅ ¡Datos CMI recuperados por la API!")
-        for track in tracks["data"]["tracks"]:
-            element = track.get("element")
-            value = track.get("value")
-            
-            # Filtramos para mostrar lo más importante para el LAD
-            if element in ["cmi.core.lesson_status", "cmi.suspend_data", "cmi.core.score.raw", "cmi.core.total_time"]:
-                print(f"  👉 {element}: {value}")
+
+    if res_attempts and res_attempts.get("attempts"):
+        print(f"  ✅ {len(res_attempts['attempts'])} intento(s) encontrado(s):")
+        for intento in res_attempts["attempts"]:
+            print(json.dumps(intento, indent=4, ensure_ascii=False))
     else:
-        print("  ⚠️ Sin datos de tracking para este SCO.")
+        print("  ⚠️ Sin intentos registrados para este usuario en este quiz.")

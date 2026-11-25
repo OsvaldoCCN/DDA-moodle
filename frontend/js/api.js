@@ -25,10 +25,10 @@
   }
 
   var real = {
-    login: function (id) { return http("POST", "/api/login", { estudiante_id: id }); },
-    lad: function (id) { return http("GET", "/api/lad/" + id); },
-    chat: function (id, mensaje) { return http("POST", "/api/chat", { estudiante_id: id, mensaje: mensaje }); },
-    historial: function (id) { return http("GET", "/api/historial/" + id); }
+    login: function (id, courseId) { return http("POST", "/api/login", { estudiante_id: Number(id), course_id: Number(courseId) }); },
+    lad: function (id, courseId) { return http("GET", "/api/lad/" + id + "?course_id=" + encodeURIComponent(courseId)); },
+    chat: function (id, courseId, mensaje) { return http("POST", "/api/chat", { estudiante_id: Number(id), course_id: Number(courseId), mensaje: mensaje }); },
+    historial: function (id, courseId) { return http("GET", "/api/chat/historial?estudiante_id=" + encodeURIComponent(id) + "&course_id=" + encodeURIComponent(courseId)); }
   };
 
   // ---------- Modo de ejemplo (datos reproducibles a partir del ID) ----------
@@ -77,7 +77,7 @@
   var mock = {
     login: async function (id) { await sleep(250); return mockLad(id).estudiante; },
     lad: async function (id) { await sleep(250); return mockLad(id); },
-    chat: async function (id, m) { await sleep(900); var r = mockReply(id, m); return { respuesta: r[1], fase: r[0], juez: "aprobado" }; },
+    chat: async function (id, courseId, m) { await sleep(900); var r = mockReply(id, m); return { respuesta: r[1], fase: r[0], juez: "aprobado" }; },
     historial: async function () { return []; }
   };
 

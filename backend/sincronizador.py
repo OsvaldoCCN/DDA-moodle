@@ -18,7 +18,9 @@ def obtener_conexion():
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
         database=os.getenv("DB_NAME"),
-        port=os.getenv("DB_PORT")          
+        port=os.getenv("DB_PORT"),
+        charset="utf8mb4",
+        use_unicode=True
     )
 
 def sincronizar_actividades_cron(course_id: int):
@@ -37,6 +39,33 @@ def sincronizar_actividades_cron(course_id: int):
     
     raw_scorms = call_moodle_api("mod_scorm_get_scorms_by_courses", courseids=[course_id])
     scorms = MoodleSRLParser.limpiar_scorms(raw_scorms) if raw_scorms else []
+
+    # 1.5 Guardar o actualizar catálogo de actividades (nombres y fechas de cierre)
+    for quiz in quizzes:
+        cursor.execute('''
+            INSERT INTO actividades_curso (moodle_courseid, tipo, instancia_id, nombre, fecha_cierre)
+            VALUES (%s, 'quiz', %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                nombre = VALUES(nombre),
+                fecha_cierre = VALUES(fecha_cierre)
+        ''', (
+            course_id,
+            quiz['quiz_id'],
+            quiz['nombre'],
+            quiz.get('fecha_cierre') or 0
+        ))
+
+    for scorm in scorms:
+        cursor.execute('''
+            INSERT INTO actividades_curso (moodle_courseid, tipo, instancia_id, nombre)
+            VALUES (%s, 'scorm', %s, %s)
+            ON DUPLICATE KEY UPDATE
+                nombre = VALUES(nombre)
+        ''', (
+            course_id,
+            scorm['scorm_id'],
+            scorm['nombre']
+        ))
 
     # 2. Obtener los estudiantes registrados localmente en este curso
     cursor.execute('''
@@ -69,21 +98,31 @@ def sincronizar_actividades_cron(course_id: int):
             quiz_id = quiz['quiz_id']
             raw_attempts = call_moodle_api("mod_quiz_get_user_attempts", quizid=quiz_id, userid=moodle_userid)
             if raw_attempts:
-                intentos = MoodleSRLParser.limpiar_intentos_cuestionario(raw_attempts)
+                intentos = MoodleSRLParser.limpiar_intentos_cuestionario(
+                    raw_attempts,
+               quiz['puntaje_maximo']          
+                )
                 for intento in intentos:
                     cursor.execute('''
-                        SELECT id FROM historico_cuestionarios 
+                        SELECT id FROM historico_cuestionarios
                         WHERE estudiante_id = %s AND moodle_quizid = %s AND numero_intento = %s
                     ''', (estudiante_local_id, quiz_id, intento["numero_intento"]))
-                    
+
                     if not cursor.fetchone():
                         cursor.execute('''
-                            INSERT INTO historico_cuestionarios 
-                            (estudiante_id, moodle_quizid, numero_intento, estado, nota, minutos_usados)
-                            VALUES (%s, %s, %s, %s, %s, %s)
-                        ''', (estudiante_local_id, quiz_id, intento["numero_intento"], 
-                              intento["estado"], intento["nota"], intento["minutos_usados"]))
-                        logger.info(f"  + Quiz {quiz_id}: Intento {intento['numero_intento']} guardado para {est['anon_id']}.")
+                            INSERT INTO historico_cuestionarios
+                            (estudiante_id, moodle_courseid, moodle_quizid, numero_intento, estado, nota, nota_maxima, minutos_usados)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ''', (
+                            estudiante_local_id,
+                            course_id,
+                            quiz_id,
+                            intento["numero_intento"],
+                            intento["estado"],
+                            intento["nota"],
+                            intento["nota_maxima"],
+                            intento["minutos_usados"]
+                        ))
 
 
         # Sync SCORMs (Lógica de Producción Multi-Intento)
@@ -156,5 +195,6 @@ def sincronizar_actividades_cron(course_id: int):
 
 
 if __name__ == "__main__":
-    CURSO_PILOTO_ID = 3
-    sincronizar_actividades_cron(CURSO_PILOTO_ID)
+    CURSOS_ACTIVOS = [5]
+    for cid in CURSOS_ACTIVOS:
+        sincronizar_actividades_cron(cid)

@@ -6,7 +6,7 @@ class MoodleSRLParser:
     """
 
     @staticmethod
-    def limpiar_intentos_cuestionario(raw_data):
+    def limpiar_intentos_cuestionario(raw_data, puntaje_maximo):
         """ Limpia mod_quiz_get_user_attempts """
         intentos_limpios = []
         intentos = raw_data.get('attempts', [])
@@ -20,12 +20,14 @@ class MoodleSRLParser:
             intentos_limpios.append({
                 "numero_intento": intento.get('attempt'),
                 "estado": intento.get('state'),
-                "nota": intento.get('sumgrades', 0.0), # Moodle a veces devuelve null si no está calificado
+                "nota": intento.get('sumgrades') if intento.get('sumgrades') is not None else 0.0,
+                "nota_maxima": float(puntaje_maximo) if puntaje_maximo is not None else None,
                 "minutos_usados": minutos,
                 "fecha_inicio": intento.get('timestart'),
                 "fecha_fin": intento.get('timefinish')
             })
         return intentos_limpios
+
 
     @staticmethod
     def limpiar_tracking_scorm(raw_data):
@@ -141,7 +143,8 @@ class MoodleSRLParser:
                 "quiz_id": quiz.get('id'),
                 "curso_id": quiz.get('course'),
                 "nombre": quiz.get('name'),
-                "fecha_cierre": quiz.get('timeclose')
+                "fecha_cierre": quiz.get('timeclose'),
+                "puntaje_maximo": quiz.get('sumgrades') or quiz.get('grade')
             })
         return quizzes
 

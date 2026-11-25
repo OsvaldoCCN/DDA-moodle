@@ -19,7 +19,9 @@ def obtener_conexion():
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
         database=os.getenv("DB_NAME"),
-        port=os.getenv("DB_PORT")
+        port=os.getenv("DB_PORT"),
+        charset="utf8mb4",
+        use_unicode=True
     )
 
 def registrar_y_sincronizar_curso(course_id: int):
@@ -28,27 +30,26 @@ def registrar_y_sincronizar_curso(course_id: int):
     
     logger.info(f"--- [MANUAL] Iniciando registro y sincronización del Curso ID: {course_id} ---")
 
-    # 0. Registrar o Actualizar Curso
-    logger.info(f"Registrando/Actualizando Curso ID Moodle: {course_id}...")
-    info_curso = call_moodle_api("core_course_get_courses_by_field", field="id", value=course_id)
+    # 0. Obtener y registrar/actualizar metadatos del curso
+    raw_curso = call_moodle_api("core_course_get_courses_by_field", field="id", value=course_id)
     nombre_corto = None
     nombre_completo = None
-    if info_curso and "courses" in info_curso and len(info_curso["courses"]) > 0:
-        c_data = info_curso["courses"][0]
-        nombre_corto = c_data.get("shortname")
-        nombre_completo = c_data.get("fullname")
-    
+    if raw_curso and "courses" in raw_curso and len(raw_curso["courses"]) > 0:
+        info_curso = raw_curso["courses"][0]
+        nombre_corto = info_curso.get("shortname")
+        nombre_completo = info_curso.get("fullname")
+
     cursor.execute('''
         INSERT INTO cursos (moodle_courseid, nombre_corto, nombre_completo)
         VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE 
+        ON DUPLICATE KEY UPDATE
             nombre_corto = COALESCE(VALUES(nombre_corto), nombre_corto),
             nombre_completo = COALESCE(VALUES(nombre_completo), nombre_completo)
     ''', (course_id, nombre_corto, nombre_completo))
-    
+    conexion.commit()
+
     cursor.execute("SELECT id FROM cursos WHERE moodle_courseid = %s", (course_id,))
-    res_curso = cursor.fetchone()
-    curso_local_id = res_curso[0] if res_curso else None
+    curso_local_id = cursor.fetchone()[0]
 
     # 1. Obtener Quizzes y SCORMs
     logger.info("Descubriendo actividades del curso...")
@@ -64,6 +65,33 @@ def registrar_y_sincronizar_curso(course_id: int):
     
     raw_scorms = call_moodle_api("mod_scorm_get_scorms_by_courses", courseids=[course_id])
     scorms = MoodleSRLParser.limpiar_scorms(raw_scorms) if raw_scorms else []
+
+    # 1.5 Guardar o actualizar catálogo de actividades (nombres y fechas de cierre)
+    for quiz in quizzes:
+        cursor.execute('''
+            INSERT INTO actividades_curso (moodle_courseid, tipo, instancia_id, nombre, fecha_cierre)
+            VALUES (%s, 'quiz', %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                nombre = VALUES(nombre),
+                fecha_cierre = VALUES(fecha_cierre)
+        ''', (
+            course_id,
+            quiz['quiz_id'],
+            quiz['nombre'],
+            quiz.get('fecha_cierre') or 0
+        ))
+
+    for scorm in scorms:
+        cursor.execute('''
+            INSERT INTO actividades_curso (moodle_courseid, tipo, instancia_id, nombre)
+            VALUES (%s, 'scorm', %s, %s)
+            ON DUPLICATE KEY UPDATE
+                nombre = VALUES(nombre)
+        ''', (
+            course_id,
+            scorm['scorm_id'],
+            scorm['nombre']
+        ))
 
     # 2. Descubrir y Registrar Estudiantes
     logger.info("Obteniendo estudiantes matriculados en Moodle...")
@@ -89,6 +117,7 @@ def registrar_y_sincronizar_curso(course_id: int):
             INSERT IGNORE INTO estudiantes (moodle_userid, email, anon_id) 
             VALUES (%s, %s, %s)
         ''', (moodle_userid, email, anon_id))
+        conexion.commit()
         
         cursor.execute("SELECT id FROM estudiantes WHERE moodle_userid = %s", (moodle_userid,))
         resultado = cursor.fetchone()
@@ -99,16 +128,18 @@ def registrar_y_sincronizar_curso(course_id: int):
             
         estudiante_local_id = resultado[0]
 
-        # Registrar relación estudiante en el curso
-        if curso_local_id:
-            cursor.execute('''
-                INSERT IGNORE INTO curso_estudiantes (estudiante_id, curso_id)
-                VALUES (%s, %s)
-            ''', (estudiante_local_id, curso_local_id))
+        # Registrar/actualizar matrícula del estudiante en el curso
+        roles = estudiante.get("roles") or []
+        rol = roles[0].get("shortname", "student") if roles and isinstance(roles[0], dict) else "student"
+        cursor.execute('''
+            INSERT INTO curso_estudiantes (estudiante_id, curso_id, rol)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE rol = VALUES(rol)
+        ''', (estudiante_local_id, curso_local_id, rol))
 
         # Sincronizar Quizzes
         for quiz in quizzes:
-            sincronizar_intentos_quiz(cursor, moodle_userid, estudiante_local_id, quiz['quiz_id'])
+            sincronizar_intentos_quiz(cursor, moodle_userid, estudiante_local_id, course_id, quiz['quiz_id'], puntaje_maximo=quiz.get('puntaje_maximo'))
 
         # Sincronizar SCORMs delegando la extracción de SCOs a la función de tracking
         for scorm in scorms:
@@ -120,12 +151,15 @@ def registrar_y_sincronizar_curso(course_id: int):
     logger.info("--- [MANUAL] Registro y sincronización completados ---")
 
 
-def sincronizar_intentos_quiz(cursor, moodle_userid, estudiante_local_id, quiz_id):
+def sincronizar_intentos_quiz(cursor, moodle_userid, estudiante_local_id, course_id, quiz_id, puntaje_maximo=None):
     raw_attempts = call_moodle_api("mod_quiz_get_user_attempts", quizid=quiz_id, userid=moodle_userid)
     if not raw_attempts:
         return
         
-    intentos = MoodleSRLParser.limpiar_intentos_cuestionario(raw_attempts)
+    intentos = MoodleSRLParser.limpiar_intentos_cuestionario(
+        raw_attempts,
+        puntaje_maximo=puntaje_maximo
+    )
     
     for intento in intentos:
         cursor.execute('''
@@ -136,10 +170,18 @@ def sincronizar_intentos_quiz(cursor, moodle_userid, estudiante_local_id, quiz_i
         if not cursor.fetchone():
             cursor.execute('''
                 INSERT INTO historico_cuestionarios 
-                (estudiante_id, moodle_quizid, numero_intento, estado, nota, minutos_usados)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            ''', (estudiante_local_id, quiz_id, intento["numero_intento"], 
-                  intento["estado"], intento["nota"], intento["minutos_usados"]))
+                (estudiante_id, moodle_courseid, moodle_quizid, numero_intento, estado, nota, nota_maxima, minutos_usados)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (
+                estudiante_local_id,
+                course_id,
+                quiz_id,
+                intento["numero_intento"],
+                intento["estado"],
+                intento["nota"],
+                intento["nota_maxima"],
+                intento["minutos_usados"]
+            ))
             logger.info(f"  + Quiz {quiz_id}: Nuevo intento {intento['numero_intento']} guardado.")
 
 
@@ -215,5 +257,6 @@ def sincronizar_tracking_scorm(cursor, moodle_userid, estudiante_local_id, cours
 
 
 if __name__ == "__main__":
-    CURSO_PILOTO_ID = 3
-    registrar_y_sincronizar_curso(CURSO_PILOTO_ID)
+    CURSOS_ACTIVOS = [5]
+    for cid in CURSOS_ACTIVOS:
+        registrar_y_sincronizar_curso(cid)

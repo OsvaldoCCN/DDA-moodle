@@ -7,16 +7,9 @@ if __name__ == "__main__":
     print("  Escribe 'salir' para terminar.")
     print("=" * 60 + "\n")
     
-    ID_ALUMNO_ACTIVO = 3 
-
-    estado_actual = {
-        "messages": [],
-        "estudiante_id": ID_ALUMNO_ACTIVO,
-        "fase_srl_actual": "indefinida",
-        "contexto_academico": {},
-        "tipo_interaccion": "reactiva",
-        "user_message": ""
-    }
+    ID_ALUMNO_ACTIVO = 3
+    ID_CURSO_ACTIVO = 3
+    config = {"configurable": {"thread_id": f"est_{ID_ALUMNO_ACTIVO}_curso_{ID_CURSO_ACTIVO}"}}
     
     while True:
         try:
@@ -32,12 +25,16 @@ if __name__ == "__main__":
             print("Cerrando sesión del tutor.")
             break
             
-        estado_actual["messages"].append(HumanMessage(content=user_input))
-        estado_actual["user_message"] = user_input
+        estado_entrada = {
+            "messages": [HumanMessage(content=user_input)],
+            "estudiante_id": ID_ALUMNO_ACTIVO,
+            "moodle_courseid": ID_CURSO_ACTIVO,
+            "user_message": user_input,
+        }
         
         print("\n[Pensando y orquestando fase SRL...]")
 
-        nuevo_estado = app.invoke(estado_actual)
+        nuevo_estado = app.invoke(estado_entrada, config=config)
         
         respuesta_agente = nuevo_estado["messages"][-1].content
         
@@ -47,5 +44,3 @@ if __name__ == "__main__":
         print(f"\n[Pedagogía SRL: Fase={fase.upper()} | Auditoría Juez={eval_juez.upper()}]")
         print(f"Tutor: {respuesta_agente}\n")
         print("-" * 60)
-        
-        estado_actual = nuevo_estado
