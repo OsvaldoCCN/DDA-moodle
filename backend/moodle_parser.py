@@ -41,12 +41,22 @@ class MoodleSRLParser:
             "estado": "incomplete",
             "puntaje_raw": 0.0,
             "tiempo_segundos": 0,
-            "suspend_data": None
+            "suspend_data": None,
+            "fecha_actividad": None,
         }
         
+        max_timemodified = 0
+        start_time = 0
+
         for track in tracks:
             elemento = track.get('element')
             valor = track.get('value')
+            tm = track.get('timemodified')
+            if tm:
+                try:
+                    max_timemodified = max(max_timemodified, int(tm))
+                except (ValueError, TypeError):
+                    pass
             
             if not valor:
                 continue
@@ -70,6 +80,15 @@ class MoodleSRLParser:
             elif elemento == 'cmi.suspend_data':
                 # Aquí atrapamos el JSON vital con las respuestas del alumno
                 datos["suspend_data"] = valor
+            elif elemento == 'x.start.time':
+                try:
+                    start_time = max(start_time, int(valor))
+                except (ValueError, TypeError):
+                    pass
+
+        ts_final = max_timemodified or start_time
+        if ts_final > 0:
+            datos["fecha_actividad"] = ts_final
                         
         return datos
 

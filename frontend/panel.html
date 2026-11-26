@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel de Autorregulación</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/panel.css">
+</head>
+
+<body>
+
+  <div id="app">
+    <main class="lad" aria-label="Panel de autorregulación">
+      <header class="topbar">
+        <div>
+          <h2>Panel de Autorregulación</h2>
+          <div class="who"><span id="who" class="mono"></span></div>
+        </div>
+        <div class="topbar-controls">
+          <button class="link" id="logout" type="button">Cerrar sesión</button>
+        </div>
+      </header>
+
+      <!-- Indicadores -->
+      <section class="kpis" aria-label="Indicadores clave de autorregulación">
+        <article class="kpi">
+          <div class="kpi-head">
+            <span class="label">Tiempo total invertido</span>
+          </div>
+          <div>
+            <b class="big" id="kpi-total-time">0 s</b>
+            <div><small id="kpi-attempts-summary">en 0 intentos registrados</small></div>
+          </div>
+          <div class="kpi-breakdown">
+            <div><span>Material interactivo</span><span class="val" id="kpi-scorm-time">0 s</span></div>
+            <div><span>Cuestionarios</span><span class="val" id="kpi-quiz-time">0 s</span></div>
+          </div>
+        </article>
+
+        <article class="kpi">
+          <div class="kpi-head">
+            <span class="label">Rendimiento global</span>
+          </div>
+          <div>
+            <b class="big" id="kpi-perf-avg">—</b>
+            <div><small id="kpi-perf-sub">mejor logro promedio por actividad</small></div>
+          </div>
+          <div class="kpi-breakdown">
+            <div><span>Material interactivo</span><span class="val" id="kpi-perf-scorm">—</span></div>
+            <div><span>Cuestionarios</span><span class="val" id="kpi-perf-quiz">—</span></div>
+            <div><span>Evolución vs. 1er intento</span><span class="val" id="kpi-perf-delta">—</span></div>
+          </div>
+        </article>
+
+        <article class="kpi">
+          <div class="kpi-head">
+            <span class="label">Avance y punto de retorno</span>
+          </div>
+          <div>
+            <b class="big" id="kpi-avance">0 / 0</b>
+            <div><small>actividades completadas</small></div>
+          </div>
+          <div id="return-point-container"></div>
+        </article>
+      </section>
+
+      <!-- Fila 1: dos gráficos lado a lado -->
+      <section class="charts-grid" aria-label="Evolución y calibración">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Evolución de rendimiento por intento</h3>
+              <div class="legend">Logro (%) por actividad e intento</div>
+            </div>
+          </div>
+          <div class="canvas-wrap"><canvas id="chart-evolucion"></canvas></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Calibración tiempo vs. resultado</h3>
+              <div class="legend">Minutos invertidos (eje X) vs. logro % (eje Y) por intento</div>
+            </div>
+          </div>
+          <div class="canvas-wrap"><canvas id="chart-scatter"></canvas></div>
+        </article>
+      </section>
+
+      <!-- Fila 2: matriz de preguntas junto al tiempo por actividad -->
+      <section class="charts-grid" aria-label="Matriz de preguntas y tiempo por actividad">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Matriz pregunta × intento (<span style="color: var(--accent);">✓</span> / <span
+                  style="color: var(--soft);">✗</span>)</h3>
+              <div class="legend">Respuestas por intento en el material interactivo</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <label for="scorm-select" class="label">Recurso:</label>
+              <select id="scorm-select" class="select-ctrl mono"></select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead id="matrix-head"></thead>
+              <tbody id="matrix-body"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Tiempo por actividad</h3>
+              <div class="legend">Tiempo acumulado. Relleno: material interactivo · Contorno: cuestionario</div>
+            </div>
+          </div>
+          <div class="canvas-wrap"><canvas id="chart-tiempo"></canvas></div>
+        </article>
+      </section>
+
+      <!-- Bitácora -->
+      <section class="panel" aria-label="Bitácora cronológica de intentos">
+        <div class="panel-head">
+          <div>
+            <h3>Bitácora cronológica de intentos</h3>
+            <div class="legend">Material interactivo y cuestionarios, ordenados por fecha</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Actividad</th>
+                <th>Intento</th>
+                <th>Estado</th>
+                <th>Resultado</th>
+                <th>Tiempo</th>
+              </tr>
+            </thead>
+            <tbody id="log-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <aside class="chat" aria-label="Tutor socrático">
+      <div class="chat-head">
+        <div>
+          <h3>Tutor socrático</h3>
+          <p>Diálogo guiado sobre tu avance en el curso</p>
+        </div>
+      </div>
+      <div class="msgs" id="msgs" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <form class="composer" id="composer" autocomplete="off">
+        <textarea id="msg" rows="1" placeholder="Escribe tu reflexión o duda..." aria-label="Mensaje"></textarea>
+        <button class="btn" id="sendBtn" type="submit">Enviar</button>
+      </form>
+    </aside>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js?v=2"></script>
+  <script src="js/session.js"></script>
+  <script src="js/panel.js?v=2"></script>
+</body>
+
+</html>

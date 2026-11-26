@@ -1,0 +1,16 @@
+/* ---------- Login ---------- */
+#login { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; }
+.login-box { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 24px; }
+.login-box h1 { font-family: var(--font-display); font-weight: 600; font-size: 34px; line-height: 1.15; margin: 0; text-wrap: balance; }
+.login-box p { margin: 0; color: var(--soft); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field input { padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 6px; background: var(--bg); font-family: var(--font-mono); font-size: 16px; }
+.field input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--tint); }
+.btn { background: var(--accent); color: var(--bg); border: 0; border-radius: 6px; padding: 12px 18px; font-weight: 600; cursor: pointer; }
+.btn:hover { filter: brightness(1.1); }
+.btn:disabled { opacity: .55; cursor: default; }
+.err { color: var(--ink); font-size: 13px; min-height: 18px; margin: 0; }
+.hint { font-size: 12.5px; color: var(--soft); }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+
+

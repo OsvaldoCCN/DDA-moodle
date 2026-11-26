@@ -1,0 +1,43 @@
+/* Tema oscuro. Solo 3 colores: fondo, tinta (texto) y acento mostaza. El resto se deriva de ellos. */
+:root {
+  --bg: #121A21;
+  --ink: #E6EBEE;
+  --accent: #B8923A;
+  --line: color-mix(in srgb, var(--ink) 16%, var(--bg));
+  --soft: color-mix(in srgb, var(--ink) 62%, var(--bg));
+  --tint: color-mix(in srgb, var(--accent) 16%, var(--bg));
+  --font-display: "Source Serif 4", Georgia, serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+button, input, select { font: inherit; color: inherit; }
+#login { min-height: 100%; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.label {
+  font-size: 11.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--soft);
+  font-weight: 500;
+}
+
+/* Scrollbar derivado estrictamente de la paleta */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--soft); }
+

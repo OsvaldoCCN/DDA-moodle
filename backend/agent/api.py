@@ -6,8 +6,10 @@ Ejecutar (desde backend/agent):
     pip install fastapi uvicorn
     uvicorn api:api --reload --port 8000
 """
+import json
 import logging
 import os
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -44,6 +46,34 @@ class ChatIn(BaseModel):
     estudiante_id: int
     course_id: int
     mensaje: str
+    session_id: Optional[str] = None
+
+
+class MetasIn(BaseModel):
+    estudiante_id: int
+    course_id: int
+    meta_nota_porcentaje: float
+    meta_minutos_semanales: int
+
+
+def _fecha(v) -> str:
+    return str(v)[:19] if v else ""
+
+
+def _parsear_sd(raw) -> Dict[str, Any]:
+    """Interpreta suspend_data (JSON en texto). Devuelve key, screenId, answers y results."""
+    try:
+        d = json.loads(raw) if isinstance(raw, str) and raw else {}
+    except ValueError:
+        d = {}
+    if not isinstance(d, dict):
+        d = {}
+    return {
+        "key": d.get("key") or "",
+        "pantalla": d.get("screenId") or "",
+        "answers": d.get("answers") if isinstance(d.get("answers"), dict) else {},
+        "results": d.get("results") if isinstance(d.get("results"), dict) else {},
+    }
 
 
 def _consulta(sql: str, params: tuple = ()):
@@ -104,10 +134,14 @@ def lad(estudiante_id: int, course_id: int = Query(..., description="ID del curs
 
     # Cuestionarios: mejor nota por quiz en el curso
     quizzes: Dict[int, Dict[str, Any]] = {}
+    intentos_quiz: List[Dict[str, Any]] = []
+    hace_7d = datetime.now() - timedelta(days=7)
+    min_semana = 0.0
     for f in _consulta(
-        """SELECT moodle_quizid, numero_intento, estado, nota, minutos_usados
+        """SELECT moodle_quizid, numero_intento, estado, nota, nota_maxima, minutos_usados, fecha_registro
            FROM historico_cuestionarios
-           WHERE estudiante_id = %s AND moodle_courseid = %s""",
+           WHERE estudiante_id = %s AND moodle_courseid = %s
+           ORDER BY moodle_quizid, numero_intento""",
         (estudiante_id, course_id),
     ):
         qid = f["moodle_quizid"]
@@ -126,12 +160,27 @@ def lad(estudiante_id: int, course_id: int = Query(..., description="ID del curs
         q["intentos"] += 1
         q["minutos"] += float(f["minutos_usados"] or 0)
         q["completado"] = q["completado"] or (f["estado"] or "").lower() in ESTADOS_QUIZ_OK
+        nmax = float(f["nota_maxima"] or 0) or NOTA_MAX
+        intentos_quiz.append({
+            "quiz_id": qid,
+            "nombre": q["nombre"],
+            "intento": f["numero_intento"],
+            "estado": f["estado"] or "",
+            "nota": float(f["nota"] or 0),
+            "nota_maxima": nmax,
+            "minutos": float(f["minutos_usados"] or 0),
+            "fecha": _fecha(f["fecha_registro"]),
+        })
+        if f["fecha_registro"] and f["fecha_registro"] >= hace_7d:
+            min_semana += float(f["minutos_usados"] or 0)
     quizzes_lista = sorted(quizzes.values(), key=lambda q: q["quiz_id"])
 
     # SCORM: tiempo sumado, mejor puntaje y estado del último intento por módulo en el curso
     scorm: Dict[int, Dict[str, Any]] = {}
+    intentos_scorm: List[Dict[str, Any]] = []
     for f in _consulta(
-        """SELECT moodle_scormid, numero_intento, estado, tiempo_invertido_segundos, puntaje
+        """SELECT moodle_scormid, numero_intento, estado, tiempo_invertido_segundos, puntaje,
+                  suspend_data, fecha_registro
            FROM historico_scorm
            WHERE estudiante_id = %s AND moodle_courseid = %s
            ORDER BY moodle_scormid, numero_intento""",
@@ -146,6 +195,24 @@ def lad(estudiante_id: int, course_id: int = Query(..., description="ID del curs
         s["segundos"] += int(f["tiempo_invertido_segundos"] or 0)
         s["puntaje"] = max(s["puntaje"], float(f["puntaje"] or 0))
         s["completado"] = (f["estado"] or "").lower() in ESTADOS_SCORM_OK  # el último intento manda
+        sd = _parsear_sd(f["suspend_data"])
+        res = list(sd["results"].values())
+        s["aciertos"] = sum(1 for v in res if v is True)
+        s["total"] = len(res)  # del último intento
+        intentos_scorm.append({
+            "scorm_id": sid,
+            "nombre": nombres_scorm.get(sid, f"Módulo SCORM {sid}"),
+            "intento": f["numero_intento"],
+            "estado": f["estado"] or "",
+            "segundos": int(f["tiempo_invertido_segundos"] or 0),
+            "key": sd["key"],
+            "pantalla": sd["pantalla"],
+            "answers": sd["answers"],
+            "results": sd["results"],
+            "fecha": _fecha(f["fecha_registro"]),
+        })
+        if f["fecha_registro"] and f["fecha_registro"] >= hace_7d:
+            min_semana += int(f["tiempo_invertido_segundos"] or 0) / 60
     scorm_lista = [
         {
             "scorm_id": s["scorm_id"],
@@ -153,6 +220,8 @@ def lad(estudiante_id: int, course_id: int = Query(..., description="ID del curs
             "intentos": s["intentos"],
             "minutos": round(s["segundos"] / 60),
             "puntaje": s["puntaje"],
+            "aciertos": s.get("aciertos", 0),
+            "total": s.get("total", 0),
             "completado": s["completado"],
         }
         for s in sorted(scorm.values(), key=lambda s: s["scorm_id"])
@@ -195,6 +264,7 @@ def lad(estudiante_id: int, course_id: int = Query(..., description="ID del curs
             "scorm_iniciados": len(scorm_lista),
             "tiempo_scorm_min": tiempo_scorm_min,
             "tiempo_total_min": tiempo_scorm_min + tiempo_quiz_min,
+            "tiempo_semana_min": round(min_semana, 1),
             "progreso": progreso,
             "riesgo": riesgo,
             "nota_max": NOTA_MAX,
@@ -213,7 +283,34 @@ def lad(estudiante_id: int, course_id: int = Query(..., description="ID del curs
             for q in quizzes_lista
         ],
         "scorm": scorm_lista,
+        "intentos_scorm": intentos_scorm,
+        "intentos_quiz": intentos_quiz,
     }
+
+
+@api.put("/api/metas")
+def guardar_metas(datos: MetasIn):
+    """Guarda las metas de planeación del estudiante (fase de Planeación) en resumen_lad_estudiante."""
+    _estudiante(datos.estudiante_id)
+    nota = min(100.0, max(1.0, datos.meta_nota_porcentaje))
+    minutos = min(10080, max(1, datos.meta_minutos_semanales))
+    con = obtener_conexion()
+    try:
+        cur = con.cursor()
+        cur.execute(
+            """INSERT INTO resumen_lad_estudiante
+               (estudiante_id, moodle_courseid, meta_nota_porcentaje, meta_minutos_semanales)
+               VALUES (%s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE
+                 meta_nota_porcentaje = VALUES(meta_nota_porcentaje),
+                 meta_minutos_semanales = VALUES(meta_minutos_semanales)""",
+            (datos.estudiante_id, datos.course_id, nota, minutos),
+        )
+        con.commit()
+        cur.close()
+    finally:
+        con.close()
+    return {"meta_nota_porcentaje": nota, "meta_minutos_semanales": minutos}
 
 
 @api.post("/api/chat")
@@ -223,8 +320,10 @@ def chat(datos: ChatIn):
     if not mensaje:
         raise HTTPException(status_code=400, detail="El mensaje está vacío.")
 
-    # Thread ID único por estudiante y curso para aislar sesiones en LangGraph
+    # Thread ID único por estudiante, curso y sesión para iniciar chats limpios sin mezclar sesiones
     thread_id = f"est_{datos.estudiante_id}_curso_{datos.course_id}"
+    if datos.session_id:
+        thread_id = f"{thread_id}_ses_{datos.session_id}"
     config = {"configurable": {"thread_id": thread_id}}
 
     estado_entrada = {

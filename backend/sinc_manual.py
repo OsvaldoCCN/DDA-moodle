@@ -2,6 +2,7 @@ import mysql.connector
 import os
 import logging
 import uuid
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -162,27 +163,32 @@ def sincronizar_intentos_quiz(cursor, moodle_userid, estudiante_local_id, course
     )
     
     for intento in intentos:
+        ts_quiz = intento.get("fecha_fin") or intento.get("fecha_inicio")
+        fecha_quiz = datetime.fromtimestamp(ts_quiz) if ts_quiz and ts_quiz > 0 else None
+
         cursor.execute('''
-            SELECT id FROM historico_cuestionarios 
-            WHERE estudiante_id = %s AND moodle_quizid = %s AND numero_intento = %s
-        ''', (estudiante_local_id, quiz_id, intento["numero_intento"]))
-        
-        if not cursor.fetchone():
-            cursor.execute('''
-                INSERT INTO historico_cuestionarios 
-                (estudiante_id, moodle_courseid, moodle_quizid, numero_intento, estado, nota, nota_maxima, minutos_usados)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (
-                estudiante_local_id,
-                course_id,
-                quiz_id,
-                intento["numero_intento"],
-                intento["estado"],
-                intento["nota"],
-                intento["nota_maxima"],
-                intento["minutos_usados"]
-            ))
-            logger.info(f"  + Quiz {quiz_id}: Nuevo intento {intento['numero_intento']} guardado.")
+            INSERT INTO historico_cuestionarios 
+            (estudiante_id, moodle_courseid, moodle_quizid, numero_intento, estado, nota, nota_maxima, minutos_usados, fecha_registro)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP))
+            ON DUPLICATE KEY UPDATE
+                estado = VALUES(estado),
+                nota = VALUES(nota),
+                nota_maxima = VALUES(nota_maxima),
+                minutos_usados = VALUES(minutos_usados),
+                fecha_registro = COALESCE(%s, fecha_registro)
+        ''', (
+            estudiante_local_id,
+            course_id,
+            quiz_id,
+            intento["numero_intento"],
+            intento["estado"],
+            intento["nota"],
+            intento["nota_maxima"],
+            intento["minutos_usados"],
+            fecha_quiz,
+            fecha_quiz
+        ))
+        logger.info(f"  + Quiz {quiz_id}: Intento {intento['numero_intento']} sincronizado.")
 
 
 def sincronizar_tracking_scorm(cursor, moodle_userid, estudiante_local_id, course_id, scorm_id):
@@ -199,6 +205,7 @@ def sincronizar_tracking_scorm(cursor, moodle_userid, estudiante_local_id, cours
         tiempo_total = 0
         puntaje_final = 0.0
         suspend_data_final = None
+        fecha_scorm_ts = 0
         hubo_interaccion = False
         tracks_encontrados_en_intento = False
 
@@ -232,6 +239,9 @@ def sincronizar_tracking_scorm(cursor, moodle_userid, estudiante_local_id, cours
                 if datos_sco["suspend_data"]:
                     suspend_data_final = datos_sco["suspend_data"]
 
+                if datos_sco.get("fecha_actividad"):
+                    fecha_scorm_ts = max(fecha_scorm_ts, datos_sco["fecha_actividad"])
+
         # Si iteramos todos los SCOs y ninguno tenía tracks para el intento N, 
         # significa que el alumno no tiene más intentos. Salimos del bucle while.
         if not tracks_encontrados_en_intento:
@@ -239,16 +249,18 @@ def sincronizar_tracking_scorm(cursor, moodle_userid, estudiante_local_id, cours
 
         # Si hubo interacción, guardamos este intento específico en MySQL
         if hubo_interaccion:
+            fecha_scorm = datetime.fromtimestamp(fecha_scorm_ts) if fecha_scorm_ts > 0 else None
             cursor.execute('''
                 INSERT INTO historico_scorm 
-                (estudiante_id, moodle_courseid, moodle_scormid, numero_intento, estado, tiempo_invertido_segundos, puntaje, suspend_data)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (estudiante_id, moodle_courseid, moodle_scormid, numero_intento, estado, tiempo_invertido_segundos, puntaje, suspend_data, fecha_registro)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP))
                 ON DUPLICATE KEY UPDATE 
                     estado = VALUES(estado),
                     tiempo_invertido_segundos = VALUES(tiempo_invertido_segundos),
                     puntaje = VALUES(puntaje),
-                    suspend_data = VALUES(suspend_data)
-            ''', (estudiante_local_id, course_id, scorm_id, intento, estado_final, tiempo_total, puntaje_final, suspend_data_final))
+                    suspend_data = VALUES(suspend_data),
+                    fecha_registro = COALESCE(%s, fecha_registro)
+            ''', (estudiante_local_id, course_id, scorm_id, intento, estado_final, tiempo_total, puntaje_final, suspend_data_final, fecha_scorm, fecha_scorm))
             
             logger.info(f"  + SCORM ID {scorm_id}: Intento {intento} guardado (Estado: {estado_final}).")
         

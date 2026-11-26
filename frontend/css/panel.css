@@ -1,0 +1,606 @@
+/* ---------- Layout App (2 columnas: LAD + Chat) ---------- */
+#app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+
+.lad {
+  overflow-y: auto;
+  padding: 20px 24px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ---------- Topbar ---------- */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 28px;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.topbar .who {
+  color: var(--soft);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.select-ctrl {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.select-ctrl:hover,
+.select-ctrl:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.link {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color .15s, color .15s;
+}
+
+.link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------- KPIs ---------- */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.kpi {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kpi-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.kpi b.big {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.kpi small {
+  color: var(--soft);
+  font-size: 12px;
+}
+
+.kpi-breakdown {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--soft);
+}
+
+.kpi-breakdown div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kpi-breakdown span.val {
+  color: var(--ink);
+  font-family: var(--font-mono);
+}
+
+/* Punto de retorno en SCORM */
+.return-alert {
+  border: 1px dashed var(--accent);
+  background: var(--tint);
+  border-radius: 6px;
+  padding: 9px 11px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.return-ok {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 11px;
+  font-size: 12px;
+  color: var(--soft);
+}
+
+/* ---------- Paneles y Gráficos ---------- */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.panel h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.legend {
+  font-size: 12px;
+  color: var(--soft);
+  margin-top: 2px;
+}
+
+.canvas-wrap {
+  position: relative;
+  height: 245px;
+  width: 100%;
+}
+
+/* ---------- Pills / Badges ---------- */
+.pill {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 99px;
+  padding: 1px 9px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pill.done {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.pill.none {
+  border-color: var(--line);
+  color: var(--soft);
+}
+
+.pill.persist {
+  border-style: dashed;
+  background: var(--tint);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* ---------- Tablas (Matriz Pregunta x Intento y Bitácora) ---------- */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+th {
+  padding: 9px 12px;
+  font-size: 11px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--soft);
+  font-weight: 500;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 3%, var(--bg));
+  white-space: nowrap;
+}
+
+td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+tbody tr:first-child td {
+  border-top: 0;
+}
+
+tbody tr:hover {
+  background: color-mix(in srgb, var(--ink) 3%, var(--bg));
+}
+
+.mark-ok {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.mark-err {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 99px;
+  border: 1px dashed var(--soft);
+  color: var(--soft);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ans-code {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--soft);
+}
+
+.ans-code.err {
+  color: var(--ink);
+}
+
+.btn-ghost {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .15s, color .15s, background .15s;
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--tint);
+}
+
+/* ---------- Chat Derecho ---------- */
+.chat {
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.chat-head {
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.chat-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.chat-head p {
+  margin: 3px 0 0;
+  color: var(--soft);
+  font-size: 12.5px;
+}
+
+.msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.m {
+  max-width: 88%;
+  padding: 10px 13px;
+  border-radius: 10px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  line-height: 1.48;
+}
+
+.m.bot {
+  align-self: flex-start;
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 3px;
+}
+
+.m.me {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 500;
+  border-bottom-right-radius: 3px;
+}
+
+.m .tag {
+  display: block;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.chat-list {
+  margin: 6px 0 2px;
+  padding-left: 18px;
+}
+
+.chat-list li {
+  margin-bottom: 4px;
+}
+
+.inline-code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--tint);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 18px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.chip {
+  border: 1px solid var(--line);
+  background: none;
+  border-radius: 99px;
+  padding: 4px 11px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--soft);
+  transition: border-color .15s, color .15s;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  font-family: inherit;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  resize: none;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.composer textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--tint);
+}
+
+.btn {
+  background: var(--accent);
+  color: var(--bg);
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------- Responsivo (< 900px) ---------- */
+@media (max-width: 900px) {
+
+  html,
+  body {
+    height: auto;
+  }
+
+  #app {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lad {
+    overflow: visible;
+    padding: 16px;
+  }
+
+  .charts-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chat {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    height: 78vh;
+  }
+}
+
+/* ---------- Extras ---------- */
+.dots {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--soft);
+  animation: b 1s infinite;
+}
+
+.dots i:nth-child(2) {
+  animation-delay: .15s;
+}
+
+.dots i:nth-child(3) {
+  animation-delay: .3s;
+}
+
+@keyframes b {
+
+  0%,
+  70%,
+  100% {
+    opacity: .3;
+  }
+
+  35% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots i {
+    animation: none;
+    opacity: .7;
+  }
+}
+
+.btn:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.empty {
+  color: var(--soft);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+/* ---------- Tabla de matriz: celdas compactas ---------- */
+.matrix-q {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.date-cell {
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.date-cell b {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 12.5px;
+}
+
+.date-cell span {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--soft);
+}
+
+.login-msg {
+  color: var(--ink);
+  font-size: 13px;
+  min-height: 18px;
+  margin: 0;
+}

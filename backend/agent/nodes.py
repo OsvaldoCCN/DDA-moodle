@@ -20,8 +20,8 @@ def gatekeeper_node(state: Dict[str, Any]) -> Dict[str, Any]:
 Tu tarea es analizar el mensaje del estudiante y decidir si la consulta es una petición válida para guiar su aprendizaje.
 
 CONSULTAS VÁLIDAS (Debe ser aprobado):
-- Consultar desempeño, notas, progreso, avance, actividades realizadas, intentos o estado general en el curso (ej: "¿cómo me ha ido?", "¿cuántos scorms he hecho?", "¿cuáles son mis notas?").
-- Dudas conceptuales, organización del tiempo, estrategias de estudio y reflexión metacognitiva.
+- Consultar su tablero, panel, LAD, dashboard, desempeño, notas, progreso, avance, tiempo de estudio, metas, actividades realizadas (SCORM o cuestionarios), intentos, fechas o estado general en el curso (ej: "¿qué ves de mi tablero?", "¿cómo me ha ido?", "¿cuántos scorms he hecho?", "¿cuáles son mis notas?", "en el scorm X ¿puedes ver mi rendimiento?").
+- Dudas conceptuales, organización del tiempo, estrategias de estudio, sesiones anteriores y reflexión metacognitiva.
 
 CONSULTAS INVÁLIDAS / TRAMPA / FUERA DE ÁMBITO (Debe ser rechazado):
 - Pedir que el tutor resuelva directamente un ejercicio, examen, tarea o programe código por ellos.
@@ -94,12 +94,14 @@ Fase SRL actual del estudiante: {fase}
 ID del estudiante: {estudiante_id}
 ID del curso (moodle_courseid): {moodle_courseid}
 
-Tu tarea: Revisa la consulta del estudiante en el historial y decide si necesitas consultar la base de datos:
-- Usa 'consultar_rendimiento_cuestionarios' si pregunta por notas, estado en el curso, evaluaciones o desempeño.
-- Usa 'consultar_esfuerzo_scorm' si pregunta por avance de lectura o material visto.
+Tu tarea: Revisa la consulta del estudiante en el historial y decide qué herramientas de base de datos necesitas consultar:
+- Usa 'consultar_lad_estudiante' si pregunta por su panel, resumen, avance general, promedio, riesgo, metas o "¿cómo voy?" en el curso.
+- Usa 'consultar_rendimiento_cuestionarios' si pregunta por el detalle de intentos o notas de cuestionarios.
+- Usa 'consultar_esfuerzo_scorm' si pregunta por avance de lectura, material interactivo o en qué preguntas específicas se equivocó.
+- Usa 'consultar_historial_conversaciones' si menciona algo de una sesión anterior (ej. una meta acordada antes, un tema previo o "¿qué hablamos la última vez?").
 
-Si la consulta requiere datos académicos del alumno, invoca OBLIGATORIAMENTE la herramienta correspondiente pasando estudiante_id={estudiante_id} y moodle_courseid={moodle_courseid}.
-Si no requiere datos, NO invoques ninguna herramienta."""
+Puedes invocar una o varias herramientas en paralelo pasando SIEMPRE estudiante_id={estudiante_id} y moodle_courseid={moodle_courseid}.
+Si no requiere datos académicos, NO invoques ninguna herramienta."""
 
     mensajes = [SystemMessage(content=prompt_orquestador)] + historial
     respuesta = llm_with_tools.invoke(mensajes)
@@ -130,6 +132,11 @@ Fase actual del estudiante: {fase}
 
 ESTILO Y PERSONALIDAD:
 {personalidad}
+
+REGLAS SOCRÁTICAS OBLIGATORIAS:
+1. Nunca entregues soluciones directas de ejercicios, tareas, exámenes o código completo.
+2. Basa tus observaciones en los datos reales del estudiante obtenidos mediante las herramientas (si fueron consultadas), mencionando los nombres de sus actividades cuando corresponda.
+3. Cierra siempre con al menos una pregunta reflexiva concreta que invite al estudiante a planificar, monitorear o evaluar su propio aprendizaje.
 """
 
     mensajes_llm = [SystemMessage(content=prompt_sistema)] + historial
@@ -171,8 +178,8 @@ CORREGIDO: [Escribe aquí la versión corregida respetando el método socrático
     evaluacion = llm.invoke([SystemMessage(content=prompt_juez)])
     texto_eval = evaluacion.content.strip()
     
-    if texto_eval.startswith("CORREGIDO:"):
-        nuevo_contenido = texto_eval.replace("CORREGIDO:", "").strip()
+    if texto_eval.upper().startswith("CORREGIDO:"):
+        nuevo_contenido = texto_eval.split(":", 1)[1].strip()
         mensaje_corregido = AIMessage(
             content=nuevo_contenido,
             id=getattr(mensaje_borrador, "id", None)
