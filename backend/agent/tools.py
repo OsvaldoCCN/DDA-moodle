@@ -290,11 +290,32 @@ def consultar_esfuerzo_scorm(estudiante_id: int, moodle_courseid: int) -> str:
             if json_respuestas:
                 try:
                     datos_json = json.loads(json_respuestas)
-                    if 'answers' in datos_json:
-                        respuesta += "  Respuestas específicas del alumno en este intento:\n"
-                        for pregunta_id, datos_respuesta in datos_json['answers'].items():
-                            correcta = "Correcta (ok:true)" if datos_respuesta.get('ok') else "Incorrecta (ok:false)"
-                            respuesta += f"    * Pregunta {pregunta_id}: {correcta}\n"
+                    if isinstance(datos_json, dict):
+                        pantalla = datos_json.get("pantalla")
+                        key = datos_json.get("key")
+                        if pantalla or key:
+                            respuesta += f"  Contexto SCORM: key={key or '-'} | pantalla={pantalla or '-'}\n"
+
+                        results = datos_json.get("results")
+                        answers = datos_json.get("answers")
+
+                        if isinstance(results, dict) and results:
+                            respuesta += "  Resultados por pregunta en este intento:\n"
+                            for pregunta_id, ok in results.items():
+                                estado_p = "Correcta" if ok else "Incorrecta"
+                                resp_txt = answers.get(pregunta_id) if isinstance(answers, dict) else None
+                                extra = f" (respuesta marcada: {resp_txt})" if resp_txt is not None else ""
+                                respuesta += f"    * {pregunta_id}: {estado_p}{extra}\n"
+                        elif isinstance(answers, dict) and answers:
+                            respuesta += "  Respuestas específicas del alumno en este intento:\n"
+                            for pregunta_id, datos_respuesta in answers.items():
+                                if isinstance(datos_respuesta, dict):
+                                    correcta = "Correcta (ok:true)" if datos_respuesta.get("ok") else "Incorrecta (ok:false)"
+                                    respuesta += f"    * {pregunta_id}: {correcta}\n"
+                                else:
+                                    respuesta += f"    * {pregunta_id}: {datos_respuesta}\n"
+                        else:
+                            respuesta += f"  Datos internos guardados: {json_respuestas}\n"
                     else:
                         respuesta += f"  Datos internos guardados: {json_respuestas}\n"
                 except json.JSONDecodeError:

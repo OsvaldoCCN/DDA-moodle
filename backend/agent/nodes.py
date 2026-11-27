@@ -16,17 +16,17 @@ def gatekeeper_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     mensaje = state.get("user_message", "")
     
-    prompt_guardrail = f"""Eres el guardián de entrada (Gatekeeper) de un tutor socrático universitario.
-Tu tarea es analizar el mensaje del estudiante y decidir si la consulta es una petición válida para guiar su aprendizaje.
+    prompt_guardrail = f"""Eres el guardián de entrada (Gatekeeper) de un tutor socrático universitario de aprendizaje autorregulado (SRL).
+Por defecto, debes ser PERMISIVO y aprobar cualquier conversación sobre el proceso de aprendizaje del estudiante.
 
-CONSULTAS VÁLIDAS (Debe ser aprobado):
-- Consultar su tablero, panel, LAD, dashboard, desempeño, notas, progreso, avance, tiempo de estudio, metas, actividades realizadas (SCORM o cuestionarios), intentos, fechas o estado general en el curso (ej: "¿qué ves de mi tablero?", "¿cómo me ha ido?", "¿cuántos scorms he hecho?", "¿cuáles son mis notas?", "en el scorm X ¿puedes ver mi rendimiento?").
-- Pedir aclaraciones o cuestionar datos que el tutor mencionó en su respuesta anterior (ej: "¿de dónde sacas que tengo 2/7?", "¿por qué dices eso?", "explícame ese cálculo").
-- Dudas conceptuales, organización del tiempo, estrategias de estudio, sesiones anteriores y reflexión metacognitiva.
+REGLA PRINCIPAL: Responde "invalido" ÚNICAMENTE si el estudiante pide explícitamente alguna de estas dos cosas:
+1. Que resuelvas por él un ejercicio, problema matemático, tarea, evaluación o escribas código.
+2. Que expliques o respondas directamente preguntas de materia/contenido teórico del curso (ej. "¿cómo se deriva esto?", "explícame la regla de la cadena", "¿cuál es la respuesta de la pregunta 2?").
 
-CONSULTAS INVÁLIDAS / TRAMPA / FUERA DE ÁMBITO (Debe ser rechazado):
-- Pedir que el tutor resuelva directamente un ejercicio, examen, tarea o programe código por ellos.
-- Temas completamente ajenos a la universidad o al ámbito académico.
+TODO LO DEMÁS ES "valido", incluyendo:
+- Preguntas sobre su tablero, panel, LAD, notas, tiempo de estudio, progreso, fechas, intentos o rendimiento (ej. "¿cuánto he estudiado?", "¿cómo me fue?", "¿en qué preguntas me equivoqué?", "¿de dónde sacas ese dato?").
+- Pedir consejos de estudio, organización del tiempo, estrategias para mejorar su rendimiento, metas o recordar conversaciones anteriores.
+- Saludos, respuestas cortas o reflexión sobre su aprendizaje.
 
 Último mensaje del estudiante: "{mensaje}"
 
@@ -37,7 +37,7 @@ REGLA ESTRICTA: Responde ÚNICAMENTE con la palabra "valido" o "invalido"."""
     
     if "invalido" in decision:
         mensaje_rechazo = AIMessage(
-            content="Lo siento, pero mi rol como tutor socrático es guiar tu proceso de aprendizaje y autorregulación, no resolver ejercicios ni tareas por ti. ¿Cómo prefieres que abordemos este problema paso a paso?",
+            content="Mi rol es acompañarte en tu organización y análisis de tu aprendizaje, no explicar materia ni resolver ejercicios por ti. Si quieres, podemos revisar tu panel, tus tiempos de estudio o qué temas necesitas repasar por tu cuenta.",
             name="gatekeeper_rejected"
         )
         return {
@@ -96,9 +96,9 @@ ID del estudiante: {estudiante_id}
 ID del curso (moodle_courseid): {moodle_courseid}
 
 Tu tarea: Revisa la consulta del estudiante en el historial y decide qué herramientas de base de datos necesitas consultar:
-- Usa 'consultar_lad_estudiante' si pregunta por su panel, resumen, avance general, promedio, riesgo, metas o "¿cómo voy?" en el curso.
+- Usa 'consultar_lad_estudiante' si pregunta por su panel, resumen, avance general, promedio, riesgo, tiempo de estudio o "¿cómo voy?" en el curso.
 - Usa 'consultar_rendimiento_cuestionarios' si pregunta por el detalle de intentos o notas de cuestionarios.
-- Usa 'consultar_esfuerzo_scorm' si pregunta por avance de lectura, material interactivo o en qué preguntas específicas se equivocó.
+- Usa 'consultar_esfuerzo_scorm' si pregunta por avance de lectura, material interactivo, tiempo en SCORM o en qué preguntas específicas se equivocó.
 - Usa 'consultar_historial_conversaciones' si menciona algo de una sesión anterior (ej. una meta acordada antes, un tema previo o "¿qué hablamos la última vez?").
 
 Puedes invocar una o varias herramientas en paralelo pasando SIEMPRE estudiante_id={estudiante_id} y moodle_courseid={moodle_courseid}.
@@ -134,9 +134,9 @@ Fase actual del estudiante: {fase}
 ESTILO Y PERSONALIDAD:
 {personalidad}
 
-REGLAS SOCRÁTICAS OBLIGATORIAS:
-1. Nunca entregues soluciones directas de ejercicios, tareas, exámenes o código completo.
-2. Basa tus observaciones en los datos reales del estudiante obtenidos mediante las herramientas (si fueron consultadas), mencionando los nombres de sus actividades cuando corresponda.
+REGLAS DEL TUTOR:
+1. Nunca resuelvas ejercicios, tareas, exámenes, código ni expliques contenido teórico de la materia; enfócate en el proceso de estudio y autorregulación.
+2. Sé claro, directo y cercano al responder sobre los datos reales del estudiante obtenidos mediante las herramientas (tiempos, notas, preguntas falladas en SCORM, progreso), mencionando los nombres de sus actividades cuando corresponda.
 3. Cierra siempre con al menos una pregunta reflexiva concreta que invite al estudiante a planificar, monitorear o evaluar su propio aprendizaje.
 """
 
