@@ -72,7 +72,7 @@ def consultar_lad_estudiante(estudiante_id: int, moodle_courseid: int) -> str:
 
         # Cuestionarios
         cursor.execute(
-            """SELECT moodle_quizid, numero_intento, estado, nota, minutos_usados, fecha_registro
+            """SELECT moodle_quizid, numero_intento, estado, nota, nota_maxima, minutos_usados, fecha_registro
                FROM historico_cuestionarios
                WHERE estudiante_id = %s AND moodle_courseid = %s
                ORDER BY moodle_quizid, numero_intento""",
@@ -89,6 +89,7 @@ def consultar_lad_estudiante(estudiante_id: int, moodle_courseid: int) -> str:
                     "nombre": info_act.get("nombre", f"Quiz {qid}"),
                     "fecha_cierre": info_act.get("fecha_cierre", 0),
                     "mejor_nota": 0.0,
+                    "nota_maxima": float(f["nota_maxima"] or NOTA_MAX),
                     "intentos": 0,
                     "minutos": 0.0,
                     "completado": False,
@@ -96,6 +97,8 @@ def consultar_lad_estudiante(estudiante_id: int, moodle_courseid: int) -> str:
                 },
             )
             q["mejor_nota"] = max(q["mejor_nota"], float(f["nota"] or 0))
+            if f["nota_maxima"]:
+                q["nota_maxima"] = float(f["nota_maxima"])
             q["intentos"] += 1
             q["minutos"] += float(f["minutos_usados"] or 0)
             q["completado"] = q["completado"] or (f["estado"] or "").lower() in ESTADOS_QUIZ_OK
@@ -135,17 +138,6 @@ def consultar_lad_estudiante(estudiante_id: int, moodle_courseid: int) -> str:
                 s["ultima_fecha"] = f["fecha_registro"]
         scorm_lista = sorted(scorm.values(), key=lambda x: x["scorm_id"])
 
-        # Metas de planeación
-        cursor.execute(
-            """SELECT meta_nota_porcentaje, meta_minutos_semanales
-               FROM resumen_lad_estudiante
-               WHERE estudiante_id = %s AND moodle_courseid = %s""",
-            (estudiante_id, moodle_courseid),
-        )
-        meta_row = cursor.fetchone()
-        meta_nota = float(meta_row["meta_nota_porcentaje"]) if meta_row and meta_row["meta_nota_porcentaje"] is not None else 70.0
-        meta_minutos = int(meta_row["meta_minutos_semanales"]) if meta_row and meta_row["meta_minutos_semanales"] is not None else 60
-
         cursor.close()
 
         # Cálculos idénticos a api.py (GET /api/lad)
@@ -169,10 +161,9 @@ def consultar_lad_estudiante(estudiante_id: int, moodle_courseid: int) -> str:
             f"=== PANEL LAD DEL ESTUDIANTE {estudiante_id} (CURSO {moodle_courseid}) ===",
             f"- Material interactivo (SCORM) completado: {sum(1 for s in scorm_lista if s['completado'])}/{len(scorm_lista)}",
             f"- Cuestionarios completados: {sum(1 for q in quizzes_lista if q['completado'])}/{len(quizzes_lista)}",
-            f"- Promedio en cuestionarios: {promedio:.1f} / {NOTA_MAX:.1f}",
+            f"- Promedio en cuestionarios: {promedio:.1f}",
             f"- Tiempo total de estudio: {tiempo_total_min} min (SCORM: {tiempo_scorm_min} min, Quizzes: {tiempo_quiz_min} min)",
             f"- Progreso general del curso: {progreso}% | Nivel de riesgo SRL: {riesgo}",
-            f"- Metas de planeación del estudiante: nota objetivo {meta_nota:.0f}%, dedicación semanal {meta_minutos} min",
             "",
             "Detalle de Cuestionarios en el LAD:",
         ]
@@ -187,7 +178,7 @@ def consultar_lad_estudiante(estudiante_id: int, moodle_courseid: int) -> str:
                 else "Sin cierre"
             )
             lines.append(
-                f"  * {q['nombre']} (ID {q['quiz_id']}): Mejor nota {q['mejor_nota']:.1f}/{NOTA_MAX:.1f} | "
+                f"  * {q['nombre']} (ID {q['quiz_id']}): Mejor nota {q['mejor_nota']:.1f}/{q['nota_maxima']:.1f} | "
                 f"{q['intentos']} intento(s) | {round(q['minutos'])} min | {estado_txt} | "
                 f"Última actividad: {fecha_txt} | Cierre: {cierre_txt}"
             )
